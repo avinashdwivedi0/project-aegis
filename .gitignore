@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment Variables
+.env
+.env.local
+.env.*
+
+# Build
+dist/
+build/
+coverage/
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+prisma/dev.db
+
+# Docker
+docker-data/
+
+# Misc
+*.tmp
+*.cache
