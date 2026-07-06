@@ -24,34 +24,76 @@ enum ProjectVisibility {
   PUBLIC
 }
 
+enum RepositoryProvider {
+  LOCAL
+  GITHUB
+  ZIP
+}
+
+enum RepositoryStatus {
+  ACTIVE
+  INDEXING
+  INDEXED
+  FAILED
+  ARCHIVED
+}
+
 model User {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
-  email        String    @unique
+  email        String   @unique
   passwordHash String
-  role         Role      @default(USER)
+  role         Role     @default(USER)
 
   // Relations
   projects     Project[]
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Project {
-  id          String            @id @default(cuid())
+  id           String            @id @default(cuid())
 
-  name        String
-  description String?
+  name         String
+  description  String?
 
-  status      ProjectStatus     @default(ACTIVE)
-  visibility  ProjectVisibility @default(PRIVATE)
+  status       ProjectStatus     @default(ACTIVE)
+  visibility   ProjectVisibility @default(PRIVATE)
 
-  ownerId     String
-  owner        User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId      String
+  owner        User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  repositories Repository[]
+
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   @@index([ownerId])
+}
+
+model Repository {
+  id            String               @id @default(cuid())
+
+  name          String
+  description   String?
+
+  provider      RepositoryProvider   @default(LOCAL)
+  status        RepositoryStatus     @default(ACTIVE)
+
+  url           String?
+  defaultBranch String?
+  isPrivate     Boolean              @default(false)
+
+  projectId     String
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([projectId])
+  @@index([provider])
+  @@index([status])
+
+  @@map("repositories")
 }
