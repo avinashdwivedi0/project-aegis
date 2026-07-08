@@ -36,7 +36,8 @@ function App() {
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/repository" element={<RepositoryPage />} />
+            <Route path="/projects/:projectId/repositories" element={<RepositoryPage />} />
+
             <Route path="/analysis" element={<AnalysisPage />} />
             <Route path="/testing" element={<TestingPage />} />
             <Route path="/reports" element={<ReportsPage />} />

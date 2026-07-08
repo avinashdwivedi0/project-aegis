@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   FolderKanban,
-  FolderGit2,
   Bot,
   FlaskConical,
   FileBarChart,
@@ -20,11 +19,11 @@ export const sidebarLinks = [
     icon: FolderKanban,
     path: "/projects",
   },
-  {
-    title: "Repository",
-    icon: FolderGit2,
-    path: "/repository",
-  },
+  // {
+  //   title: "Repository",
+  //   icon: FolderGit2,
+  //   path: "/repository",
+  // },
   {
     title: "AI Analysis",
     icon: Bot,

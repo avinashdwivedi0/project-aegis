@@ -1,10 +1,13 @@
 import {
   Calendar,
+  FolderGit2,
   FolderKanban,
   Globe,
   Lock,
   Users,
 } from "lucide-react";
+
+import { useNavigate } from "react-router-dom";
 
 import type { Project } from "@/types/project";
 
@@ -19,6 +22,8 @@ function ProjectCard({
   onEdit,
   onDelete,
 }: ProjectCardProps) {
+  const navigate = useNavigate();
+
   const visibilityIcon =
     project.visibility === "PUBLIC" ? (
       <Globe size={16} />
@@ -52,7 +57,6 @@ function ProjectCard({
         hover:shadow-cyan-500/10
       "
     >
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -67,7 +71,7 @@ function ProjectCard({
           </div>
 
           <p className="mt-2 text-sm text-slate-400">
-            {project.description ||
+            {project.description ??
               "No description provided."}
           </p>
         </div>
@@ -77,7 +81,6 @@ function ProjectCard({
         </div>
       </div>
 
-      {/* Footer */}
       <div className="mt-6 flex items-center justify-between">
         <span
           className={`rounded-full px-3 py-1 text-xs font-medium ${statusColor}`}
@@ -94,18 +97,31 @@ function ProjectCard({
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="mt-6 flex gap-3">
+      <div className="mt-6 grid grid-cols-3 gap-3">
         <button
           onClick={() => onEdit(project)}
-          className="flex-1 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium transition hover:bg-cyan-500"
+          className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium transition hover:bg-cyan-500"
         >
           Edit
         </button>
 
         <button
-          onClick={() => onDelete(project)}
-          className="flex-1 rounded-xl border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/10"
+          onClick={() =>
+            navigate(
+              `/projects/${project.id}/repositories`
+            )
+          }
+          className="flex items-center justify-center gap-2 rounded-xl border border-cyan-500/30 px-4 py-2 text-sm font-medium text-cyan-400 transition hover:bg-cyan-500/10"
+        >
+          <FolderGit2 size={16} />
+          Repositories
+        </button>
+
+        <button
+          onClick={() =>
+            onDelete(project)
+          }
+          className="rounded-xl border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/10"
         >
           Delete
         </button>
