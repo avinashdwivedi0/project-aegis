@@ -12,7 +12,7 @@ function AuthLayout({
   children,
 }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+    <div className="aegis-auth-shell flex min-h-screen items-center justify-center bg-[#f6f8fb] px-6">
       <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-10 shadow-2xl">
 
         <div className="mb-10 text-center">

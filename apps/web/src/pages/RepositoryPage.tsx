@@ -33,6 +33,8 @@ function RepositoryPage() {
     repositories,
     loading,
     refresh,
+    indexRepository,
+    isRepositoryIndexing,
   } = useRepositories(safeProjectId);
 
   const [search, setSearch] =
@@ -74,15 +76,27 @@ function RepositoryPage() {
     setDeleteOpen(true);
   }
 
+  async function handleIndex(
+    repository: Repository
+  ) {
+    await indexRepository(
+      repository.id
+    );
+  }
+
   const filteredRepositories =
     useMemo(() => {
+      const normalizedSearch =
+        search.trim().toLowerCase();
+
       return repositories.filter(
         (repository) => {
           const matchesSearch =
+            normalizedSearch === "" ||
             repository.name
               .toLowerCase()
               .includes(
-                search.toLowerCase()
+                normalizedSearch
               ) ||
             (
               repository.description ??
@@ -90,18 +104,22 @@ function RepositoryPage() {
             )
               .toLowerCase()
               .includes(
-                search.toLowerCase()
+                normalizedSearch
               );
 
           const matchesProvider =
             provider === "" ||
             repository.provider ===
-              (provider as RepositoryProvider);
+              (
+                provider as RepositoryProvider
+              );
 
           const matchesStatus =
             status === "" ||
             repository.status ===
-              (status as RepositoryStatus);
+              (
+                status as RepositoryStatus
+              );
 
           return (
             matchesSearch &&
@@ -131,7 +149,6 @@ function RepositoryPage() {
 
   return (
     <>
-      {/* Header */}
       <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold">
@@ -139,22 +156,24 @@ function RepositoryPage() {
           </h1>
 
           <p className="mt-2 text-slate-400">
-            Manage project repositories.
+            Manage, import, and index
+            project repositories.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={() =>
             setCreateOpen(true)
           }
-          className="flex items-center gap-2 rounded-xl bg-cyan-600 px-5 py-3 font-medium transition hover:bg-cyan-500"
+          className="flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-5 py-3 font-medium transition hover:bg-cyan-500"
         >
           <Plus size={18} />
+
           New Repository
         </button>
       </div>
 
-      {/* Search & Filters */}
       <div className="mb-8 grid gap-4 lg:grid-cols-3">
         <RepositorySearch
           value={search}
@@ -172,7 +191,6 @@ function RepositoryPage() {
         />
       </div>
 
-      {/* Content */}
       {filteredRepositories.length ===
       0 ? (
         <EmptyRepositories
@@ -187,10 +205,13 @@ function RepositoryPage() {
           }
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onIndex={handleIndex}
+          isRepositoryIndexing={
+            isRepositoryIndexing
+          }
         />
       )}
 
-      {/* Create */}
       <CreateRepositoryModal
         open={createOpen}
         projectId={projectId}
@@ -201,10 +222,11 @@ function RepositoryPage() {
         onCreated={refresh}
       />
 
-      {/* Edit */}
       <EditRepositoryModal
         open={editOpen}
-        repository={selectedRepository}
+        repository={
+          selectedRepository
+        }
         loading={false}
         onClose={() =>
           setEditOpen(false)
@@ -212,10 +234,11 @@ function RepositoryPage() {
         onUpdated={refresh}
       />
 
-      {/* Delete */}
       <DeleteRepositoryModal
         open={deleteOpen}
-        repository={selectedRepository}
+        repository={
+          selectedRepository
+        }
         onClose={() =>
           setDeleteOpen(false)
         }

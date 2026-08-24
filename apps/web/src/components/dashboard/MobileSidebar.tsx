@@ -72,7 +72,7 @@ function MobileSidebar() {
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-slate-800 bg-slate-900 transition-transform duration-300 ease-in-out lg:hidden ${
+      className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-[#dfe4eb] bg-white transition-transform duration-300 ease-in-out lg:hidden ${
         open
           ? "translate-x-0"
           : "-translate-x-full"
@@ -85,7 +85,7 @@ function MobileSidebar() {
         <button
           onClick={closeSidebar}
           aria-label="Close Sidebar"
-          className="mr-4 rounded-xl p-2 transition-all duration-200 hover:bg-slate-800 hover:text-cyan-400"
+          className="mr-4 rounded-lg p-2 transition-all duration-200 hover:bg-[#f3f6fa] hover:text-[#1264d8]"
         >
           <X size={20} />
         </button>
@@ -106,10 +106,10 @@ function MobileSidebar() {
       </nav>
 
       {/* Logout */}
-      <div className="border-t border-slate-800 p-4">
+      <div className="border-t border-[#edf0f4] p-4">
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-red-400 transition-all duration-200 hover:bg-red-500/10"
+          className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-[#b42318] transition-all duration-200 hover:bg-[#fff1f0]"
         >
           <LogOut size={20} />
 

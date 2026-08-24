@@ -4,6 +4,7 @@ import { authenticate } from "../../middleware/auth.middleware";
 import { validate } from "../../middleware/validate.middleware";
 
 import { RepositoryController } from "./repository.controller";
+import { ExplorerController } from "./explorer.controller";
 
 import {
   createRepositorySchema,
@@ -51,6 +52,20 @@ router.get(
   RepositoryController.findById
 );
 
+router.get(
+  "/repositories/:id/stats",
+  authenticate,
+  validate(repositoryParamsSchema),
+  RepositoryController.getStats
+);
+
+router.post(
+  "/repositories/:id/index",
+  authenticate,
+  validate(repositoryParamsSchema),
+  RepositoryController.index
+);
+
 router.patch(
   "/repositories/:id",
   authenticate,
@@ -63,6 +78,25 @@ router.delete(
   authenticate,
   validate(repositoryParamsSchema),
   RepositoryController.delete
+);
+
+/*
+|--------------------------------------------------------------------------
+| Repository Explorer
+|--------------------------------------------------------------------------
+*/
+
+router.get(
+  "/repositories/:id/files",
+  authenticate,
+  validate(repositoryParamsSchema),
+  ExplorerController.getFileTree
+);
+
+router.get(
+  "/repositories/:id/file",
+  authenticate,
+  ExplorerController.getFileContent
 );
 
 export default router;

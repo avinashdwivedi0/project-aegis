@@ -7,7 +7,7 @@ import Topbar from "@/components/dashboard/Topbar";
 
 function DashboardLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-white">
+    <div className="aegis-app-shell flex h-screen overflow-hidden bg-[#f6f8fb] text-[#172033]">
       {/* Desktop Sidebar */}
       <Sidebar />
 
@@ -21,7 +21,7 @@ function DashboardLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
 
-        <main className="flex-1 overflow-y-auto bg-slate-950 p-6 md:p-8">
+        <main className="flex-1 overflow-y-auto bg-[#f6f8fb] p-5 md:p-8">
           <Outlet />
         </main>
       </div>

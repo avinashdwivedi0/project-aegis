@@ -3,12 +3,12 @@ import { Button } from "./ui/button";
 
 function Navbar() {
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-800/70 bg-slate-950/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-[#dfe4eb] bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         {/* Logo */}
         <Link
           to="/"
-          className="text-2xl font-extrabold tracking-tight text-cyan-400 transition hover:text-cyan-300"
+          className="text-xl font-semibold tracking-tight text-[#172033] transition hover:text-[#1264d8]"
         >
           Project Aegis
         </Link>
@@ -17,28 +17,28 @@ function Navbar() {
         <nav className="hidden items-center gap-8 md:flex">
           <Link
             to="/"
-            className="text-sm font-medium text-slate-300 transition hover:text-cyan-400"
+            className="text-sm font-medium text-[#667085] transition hover:text-[#1264d8]"
           >
             Home
           </Link>
 
           <a
             href="#features"
-            className="text-sm font-medium text-slate-300 transition hover:text-cyan-400"
+            className="text-sm font-medium text-[#667085] transition hover:text-[#1264d8]"
           >
             Features
           </a>
 
           <a
             href="#how-it-works"
-            className="text-sm font-medium text-slate-300 transition hover:text-cyan-400"
+            className="text-sm font-medium text-[#667085] transition hover:text-[#1264d8]"
           >
             How It Works
           </a>
 
           <a
             href="#tech-stack"
-            className="text-sm font-medium text-slate-300 transition hover:text-cyan-400"
+            className="text-sm font-medium text-[#667085] transition hover:text-[#1264d8]"
           >
             Tech Stack
           </a>

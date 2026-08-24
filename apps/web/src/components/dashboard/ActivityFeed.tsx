@@ -11,8 +11,8 @@ const activities = [
 
 function ActivityFeed() {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-      <h2 className="mb-6 text-xl font-semibold">
+    <section className="rounded-lg border border-[#dfe4eb] bg-white p-5 md:p-6">
+      <h2 className="mb-5 text-lg font-semibold text-[#172033]">
         Recent Activity
       </h2>
 
@@ -20,12 +20,12 @@ function ActivityFeed() {
         {activities.map((activity) => (
           <div
             key={activity.id}
-            className="flex items-start gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4"
+            className="flex items-start gap-4 rounded-lg border border-[#edf0f4] bg-[#fbfcfe] p-4"
           >
-            <div className="rounded-lg bg-cyan-500/10 p-2">
+            <div className="rounded-md bg-[#e8f1ff] p-2">
               <Clock3
                 size={18}
-                className="text-cyan-400"
+                className="text-[#1264d8]"
               />
             </div>
 
@@ -34,18 +34,18 @@ function ActivityFeed() {
                 {activity.title}
               </p>
 
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-[#667085]">
                 {activity.description}
               </p>
 
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-[#98a2b3]">
                 {activity.time}
               </p>
             </div>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 

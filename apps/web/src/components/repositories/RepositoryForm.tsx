@@ -62,6 +62,9 @@ function RepositoryForm<
         initialData?.isPrivate ?? false,
     });
 
+  const isGitHub =
+    form.provider === "GITHUB";
+
   function handleChange(
     e: React.ChangeEvent<
       | HTMLInputElement
@@ -196,15 +199,18 @@ function RepositoryForm<
 
       <div>
         <label className="mb-2 block text-sm font-medium">
-          Repository URL
+          {isGitHub
+            ? "GitHub Repository URL"
+            : "Repository URL"}
         </label>
 
         <input
           name="url"
           type="url"
           value={form.url}
+          required={isGitHub}
           onChange={handleChange}
-          placeholder="https://github.com/user/repository"
+          placeholder="https://github.com/owner/repository"
           className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 outline-none transition focus:border-cyan-500"
         />
       </div>

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 
+import { importGitHubRepository } from "@/services/import";
 import { createRepository } from "@/services/repository";
 
 import type {
@@ -24,19 +26,36 @@ function CreateRepositoryModal({
   onClose,
   onCreated,
 }: Props) {
+  const [submitting, setSubmitting] =
+    useState(false);
+
   if (!open) return null;
 
   async function handleCreate(
     data: CreateRepositoryInput
   ) {
     try {
-      await createRepository(
+      setSubmitting(true);
+
+      const response = await createRepository(
         projectId,
         data
       );
 
+      if (
+        data.provider === "GITHUB" &&
+        data.url
+      ) {
+        await importGitHubRepository(
+          response.data.id,
+          data.url
+        );
+      }
+
       toast.success(
-        "Repository created successfully."
+        data.provider === "GITHUB"
+          ? "GitHub repository connected."
+          : "Repository created successfully."
       );
 
       onCreated();
@@ -47,6 +66,8 @@ function CreateRepositoryModal({
           ? error.message
           : "Failed to create repository."
       );
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -74,8 +95,12 @@ function CreateRepositoryModal({
 
           <div className="p-6">
             <RepositoryForm<CreateRepositoryInput>
-              loading={loading}
-              submitText="Create Repository"
+              loading={loading || submitting}
+              submitText={
+                submitting
+                  ? "Connecting..."
+                  : "Create Repository"
+              }
               onSubmit={handleCreate}
             />
           </div>

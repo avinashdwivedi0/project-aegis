@@ -16,9 +16,9 @@ function QuickActions() {
       onClick: () => navigate("/projects"),
     },
     {
-      title: "Upload Repository",
+      title: "Connect Repository",
       icon: Upload,
-      onClick: () => navigate("/repository"),
+      onClick: () => navigate("/projects"),
     },
     {
       title: "Start AI Analysis",
@@ -33,8 +33,8 @@ function QuickActions() {
   ];
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-      <h2 className="mb-6 text-xl font-semibold">
+    <section className="rounded-lg border border-[#dfe4eb] bg-white p-5 md:p-6">
+      <h2 className="mb-5 text-lg font-semibold text-[#172033]">
         Quick Actions
       </h2>
 
@@ -46,18 +46,18 @@ function QuickActions() {
             <button
               key={action.title}
               onClick={action.onClick}
-              className="flex items-center gap-4 rounded-xl border border-slate-700 bg-slate-950 p-4 transition hover:border-cyan-500 hover:bg-slate-800"
+              className="flex items-center gap-4 rounded-lg border border-[#dfe4eb] bg-[#fbfcfe] p-4 text-left transition hover:border-[#9abff2] hover:bg-[#f3f7fd]"
             >
-              <Icon className="text-cyan-400" size={22} />
+              <span className="rounded-md bg-[#e8f1ff] p-2 text-[#1264d8]"><Icon size={19} /></span>
 
-              <span className="font-medium">
+              <span className="font-medium text-[#344054]">
                 {action.title}
               </span>
             </button>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 

@@ -9,14 +9,18 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@google/genai": "^2.13.0",
     "@prisma/client": "6.16.3",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
+    "fast-glob": "^3.3.3",
+    "fs-extra": "^11.3.6",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "simple-git": "^3.36.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -24,6 +28,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/fs-extra": "^11.0.4",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.0.15",
     "nodemon": "^3.1.10",

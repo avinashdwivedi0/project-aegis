@@ -6,6 +6,7 @@ import {
 
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/ApiError";
+import { retrievalService } from "../ai/retrieval/retrieval.service";
 
 import type {
   CreateRepositoryInput,
@@ -147,6 +148,53 @@ export class RepositoryService {
     );
   }
 
+  static async getStats(
+    repositoryId: string,
+    ownerId: string
+  ) {
+    const repository =
+      await this.findRepository(
+        repositoryId,
+        ownerId
+      );
+
+    const totalFiles =
+      await prisma.repositoryFile.count({
+        where: {
+          repositoryId,
+          type: "file",
+        },
+      });
+
+    const totalDirectories =
+      await prisma.repositoryFile.count({
+        where: {
+          repositoryId,
+          type: "directory",
+        },
+      });
+
+    return {
+      id: repository.id,
+      name: repository.name,
+      provider: repository.provider,
+      status: repository.status,
+      defaultBranch:
+        repository.defaultBranch,
+      isPrivate:
+        repository.isPrivate,
+      workspaceReady:
+        repository.workspacePath !==
+        null,
+      workspacePath:
+        repository.workspacePath,
+      totalFiles,
+      totalDirectories,
+      updatedAt:
+        repository.updatedAt,
+    };
+  }
+
   static async update(
     repositoryId: string,
     ownerId: string,
@@ -201,6 +249,57 @@ export class RepositoryService {
         }),
       },
     });
+  }
+
+  static async index(
+    repositoryId: string,
+    ownerId: string
+  ) {
+    await this.findRepository(
+      repositoryId,
+      ownerId
+    );
+
+    await prisma.repository.update({
+      where: {
+        id: repositoryId,
+      },
+      data: {
+        status:
+          RepositoryStatus.INDEXING,
+      },
+    });
+
+    try {
+      const result =
+        await retrievalService.indexRepository(
+          repositoryId
+        );
+
+      await prisma.repository.update({
+        where: {
+          id: repositoryId,
+        },
+        data: {
+          status:
+            RepositoryStatus.INDEXED,
+        },
+      });
+
+      return result;
+    } catch (error) {
+      await prisma.repository.update({
+        where: {
+          id: repositoryId,
+        },
+        data: {
+          status:
+            RepositoryStatus.FAILED,
+        },
+      });
+
+      throw error;
+    }
   }
 
   static async delete(

@@ -13,17 +13,18 @@ import ActivityFeed from "@/components/dashboard/ActivityFeed";
 
 function DashboardPage() {
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-[1440px] space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-4xl font-bold tracking-tight">
+        <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#1264d8]">
+          Overview
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#172033] md:text-4xl">
           Dashboard
         </h1>
 
-        <p className="mt-2 text-slate-400">
-          Welcome to Project Aegis. Monitor software quality,
-          repositories, AI analysis, testing, and reports from one
-          place.
+        <p className="mt-2 max-w-2xl text-[#667085]">
+          A clear view of your repositories, quality signals, and analysis activity.
         </p>
       </div>
 

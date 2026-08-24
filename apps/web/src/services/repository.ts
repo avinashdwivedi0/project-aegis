@@ -66,3 +66,13 @@ export async function deleteRepository(
 
   return response.data;
 }
+
+export async function indexRepository(
+  id: string
+) {
+  const response = await api.post<
+    ApiResponse<Repository>
+  >(`/repositories/${id}/index`);
+
+  return response.data;
+}

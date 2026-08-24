@@ -52,15 +52,15 @@ const features = [
 function Features() {
   return (
     <AnimateSection>
-      <section id="features" className="bg-slate-950 py-24">
+      <section id="features" className="bg-white py-24">
         <div className="mx-auto max-w-7xl px-6">
 
           <div className="text-center">
-            <h2 className="text-5xl font-black tracking-tight text-white">
+            <h2 className="text-4xl font-semibold tracking-tight text-[#172033] md:text-5xl">
               Everything You Need
             </h2>
 
-            <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-slate-400">
+            <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-[#667085]">
               Project Aegis combines multiple AI capabilities
               into one intelligent platform.
             </p>

@@ -24,12 +24,12 @@ function SidebarNavItem({
         to={path}
         onClick={onClick}
         className={({ isActive }) =>
-          `relative flex items-center overflow-hidden rounded-xl px-4 py-3 transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 ${
+          `relative flex items-center overflow-hidden rounded-lg px-4 py-3 transition-all duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1264d8] ${
             collapsed ? "justify-center" : "gap-3"
           } ${
             isActive
-              ? "bg-cyan-500/15 text-cyan-400 shadow-lg shadow-cyan-500/10"
-              : "text-slate-300 hover:bg-slate-800 hover:text-white hover:translate-x-1"
+              ? "bg-[#e8f1ff] text-[#1264d8]"
+              : "text-[#667085] hover:bg-[#f3f6fa] hover:text-[#172033]"
           }`
         }
       >
@@ -39,7 +39,7 @@ function SidebarNavItem({
             <span
               className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-full transition-all duration-300 ${
                 isActive
-                  ? "bg-cyan-400 opacity-100"
+                  ? "bg-[#1264d8] opacity-100"
                   : "opacity-0"
               }`}
             />
@@ -48,9 +48,9 @@ function SidebarNavItem({
             <Icon
               size={20}
               className={`shrink-0 transition-colors duration-300 ${
-                isActive
-                  ? "text-cyan-400"
-                  : "text-slate-400 group-hover:text-white"
+                  isActive
+                    ? "text-[#1264d8]"
+                    : "text-[#98a2b3] group-hover:text-[#172033]"
               }`}
             />
 

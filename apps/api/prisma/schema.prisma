@@ -14,7 +14,7 @@ enum Role {
 
 enum ProjectStatus {
   ACTIVE
-  ARCHIVED
+ ARCHIVED
   COMPLETED
 }
 
@@ -73,27 +73,84 @@ model Project {
 }
 
 model Repository {
-  id            String               @id @default(cuid())
+  id              String               @id @default(cuid())
 
-  name          String
-  description   String?
+  name            String
+  description     String?
 
-  provider      RepositoryProvider   @default(LOCAL)
-  status        RepositoryStatus     @default(ACTIVE)
+  provider        RepositoryProvider   @default(LOCAL)
+  status          RepositoryStatus     @default(ACTIVE)
 
-  url           String?
-  defaultBranch String?
-  isPrivate     Boolean              @default(false)
+  // Remote repository URL (GitHub, GitLab, etc.)
+  url             String?
 
-  projectId     String
-  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Local indexed repository location
+  workspacePath   String?
 
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  defaultBranch   String?
+  isPrivate       Boolean              @default(false)
+
+  projectId       String
+  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  files           RepositoryFile[]
+  embeddings      RepositoryEmbedding[]
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
   @@index([projectId])
   @@index([provider])
   @@index([status])
+  @@index([workspacePath])
 
   @@map("repositories")
+}
+
+model RepositoryFile {
+  id            String      @id @default(cuid())
+
+  repositoryId  String
+  repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  name          String
+  path          String
+  type          String
+
+  parentPath    String?
+
+  embeddings    RepositoryEmbedding[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([repositoryId])
+  @@index([path])
+  @@index([parentPath])
+
+  @@map("repository_files")
+}
+
+model RepositoryEmbedding {
+  id               String @id @default(cuid())
+
+  repositoryId     String
+  repository       Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  repositoryFileId String?
+  repositoryFile   RepositoryFile? @relation(fields: [repositoryFileId], references: [id], onDelete: Cascade)
+
+  filePath         String
+
+  chunkIndex       Int
+  content          String
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([repositoryId])
+  @@index([repositoryFileId])
+  @@index([filePath])
+
+  @@map("repository_embeddings")
 }

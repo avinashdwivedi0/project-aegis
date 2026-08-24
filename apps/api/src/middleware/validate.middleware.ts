@@ -14,21 +14,20 @@ export function validate(schema: ValidationSchema) {
     next: NextFunction
   ) => {
     try {
-     if (schema.body) {
-      req.body = schema.body.parse(req.body);
-    }
+      if (schema.body) {
+        req.body = schema.body.parse(req.body);
+      }
 
-     if (schema.params) {
-      req.params = schema.params.parse(
-      req.params
-     ) as Request["params"];
-   }
+      if (schema.params) {
+        req.params = schema.params.parse(
+          req.params
+        ) as Request["params"];
+      }
 
-     if (schema.query) {
-      req.query = schema.query.parse(
-      req.query
-      ) as Request["query"];
-}
+      if (schema.query) {
+        // Validate only — do not assign in Express 5
+        schema.query.parse(req.query);
+      }
 
       next();
     } catch (error) {

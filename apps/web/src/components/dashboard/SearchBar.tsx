@@ -8,7 +8,7 @@ function SearchBar() {
     <div className="relative w-full max-w-md">
       <Search
         size={18}
-        className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+        className="absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3]"
       />
 
       <input
@@ -16,7 +16,7 @@ function SearchBar() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search projects, repositories, reports..."
-        className="w-full rounded-xl border border-slate-700 bg-slate-900 py-3 pl-11 pr-4 text-sm text-white outline-none transition-all duration-200 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+        className="w-full rounded-lg border border-[#dfe4eb] bg-[#fbfcfe] py-3 pl-11 pr-4 text-sm text-[#172033] outline-none transition-all duration-200 placeholder:text-[#98a2b3] focus:border-[#1264d8] focus:ring-2 focus:ring-[#1264d8]/15"
       />
     </div>
   );

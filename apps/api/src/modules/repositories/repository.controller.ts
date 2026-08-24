@@ -84,6 +84,40 @@ export class RepositoryController {
       );
     });
 
+  static getStats =
+    asyncHandler<
+      AuthenticatedRequest<RepositoryParams>
+    >(async (req, res: Response) => {
+      const stats =
+        await RepositoryService.getStats(
+          req.params.id,
+          req.user.userId
+        );
+
+      return successResponse(
+        res,
+        "Repository statistics fetched successfully.",
+        stats
+      );
+    });
+
+  static index =
+    asyncHandler<
+      AuthenticatedRequest<RepositoryParams>
+    >(async (req, res: Response) => {
+      const result =
+        await RepositoryService.index(
+          req.params.id,
+          req.user.userId
+        );
+
+      return successResponse(
+        res,
+        "Repository indexed successfully.",
+        result
+      );
+    });
+
   static update =
     asyncHandler<
       AuthenticatedRequest<RepositoryParams>

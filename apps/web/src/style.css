@@ -1,17 +1,26 @@
 @import "tailwindcss";
 
+:root {
+  --aegis-canvas: #f6f8fb;
+  --aegis-surface: #ffffff;
+  --aegis-border: #dfe4eb;
+  --aegis-ink: #172033;
+  --aegis-muted: #667085;
+  --aegis-blue: #1264d8;
+  --aegis-blue-soft: #e8f1ff;
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
-  background: #020617;
-  color: white;
+  background: var(--aegis-canvas);
+  color: var(--aegis-ink);
   font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
+    "DM Sans",
+    "Segoe UI",
     sans-serif;
 }
 
@@ -20,8 +29,48 @@ body {
 }
 
 ::selection {
-  background: #06b6d4;
-  color: white;
+  background: #cfe2ff;
+  color: #102a56;
+}
+
+.aegis-app-shell .bg-slate-950,
+.aegis-app-shell .bg-slate-900,
+.aegis-app-shell .bg-slate-800,
+.aegis-auth-shell .bg-slate-950,
+.aegis-auth-shell .bg-slate-900 {
+  background-color: var(--aegis-surface) !important;
+}
+
+.aegis-app-shell .border-slate-800,
+.aegis-app-shell .border-slate-700,
+.aegis-auth-shell .border-slate-800,
+.aegis-auth-shell .border-slate-700 {
+  border-color: var(--aegis-border) !important;
+}
+
+.aegis-app-shell .text-white,
+.aegis-auth-shell .text-white {
+  color: var(--aegis-ink) !important;
+}
+
+.aegis-app-shell .text-slate-100,
+.aegis-app-shell .text-slate-200,
+.aegis-app-shell .text-slate-300,
+.aegis-app-shell .text-slate-400,
+.aegis-auth-shell .text-slate-300,
+.aegis-auth-shell .text-slate-400 {
+  color: var(--aegis-muted) !important;
+}
+
+.aegis-app-shell input,
+.aegis-app-shell textarea,
+.aegis-app-shell select,
+.aegis-auth-shell input,
+.aegis-auth-shell textarea,
+.aegis-auth-shell select {
+  border-color: var(--aegis-border);
+  background-color: var(--aegis-surface);
+  color: var(--aegis-ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -26,7 +26,7 @@ function Sidebar() {
 
   return (
     <aside
-      className={`hidden h-screen shrink-0 border-r border-slate-800 bg-slate-900 transition-all duration-300 ease-in-out lg:flex lg:flex-col ${
+      className={`hidden h-screen shrink-0 border-r border-[#dfe4eb] bg-white transition-all duration-300 ease-in-out lg:flex lg:flex-col ${
         collapsed ? "w-24" : "w-72"
       }`}
     >
@@ -35,7 +35,7 @@ function Sidebar() {
 
       {/* Collapse Button */}
       <div
-        className={`flex border-b border-slate-800 p-3 ${
+        className={`flex border-b border-[#edf0f4] p-3 ${
           collapsed ? "justify-center" : "justify-end"
         }`}
       >
@@ -56,11 +56,11 @@ function Sidebar() {
       </nav>
 
       {/* Logout */}
-      <div className="group relative border-t border-slate-800 p-4">
+      <div className="group relative border-t border-[#edf0f4] p-4">
         <button
           onClick={handleLogout}
           aria-label="Logout"
-          className={`flex w-full items-center rounded-xl px-4 py-3 text-red-400 transition-all duration-200 hover:bg-red-500/10 ${
+          className={`flex w-full items-center rounded-lg px-4 py-3 text-[#b42318] transition-all duration-200 hover:bg-[#fff1f0] ${
             collapsed ? "justify-center" : "gap-3"
           }`}
         >

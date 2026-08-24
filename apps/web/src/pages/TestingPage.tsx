@@ -1,12 +1,27 @@
-function TestingPage() {
-  return (
-    <div>
-      <h1 className="text-3xl font-bold">Testing</h1>
+import { FlaskConical, Gauge, LockKeyhole, TestTube2 } from "lucide-react";
 
-      <p className="mt-2 text-slate-400">
-        Execute white-box, performance, security, and AI-assisted testing.
-      </p>
-    </div>
+import { EmptyState, PageScaffold } from "@/components/ui/PageScaffold";
+
+function TestingPage() {
+  const cards = [
+    [TestTube2, "Functional tests", "Run test suites and track pass rates."],
+    [LockKeyhole, "Security checks", "Surface dependency and code-level risk."],
+    [Gauge, "Performance", "Measure response time and resource pressure."],
+  ] as const;
+
+  return (
+    <PageScaffold eyebrow="Validation lab" title="Testing" description="Coordinate functional, security, and performance checks from one focused workspace." icon={FlaskConical}>
+      <div className="grid gap-5 md:grid-cols-3">
+        {cards.map(([Icon, label, detail]) => (
+          <div key={label} className="rounded-xl border border-[#dfe4eb] bg-white p-5 shadow-[0_8px_24px_rgba(23,32,51,0.04)]">
+            <Icon className="text-[#1264d8]" size={20} />
+            <h2 className="mt-4 font-semibold text-[#172033]">{label}</h2>
+            <p className="mt-2 text-sm leading-6 text-[#667085]">{detail}</p>
+          </div>
+        ))}
+      </div>
+      <EmptyState icon={FlaskConical} title="No test runs yet" description="Select a repository to configure and launch a validation run." action="Choose a repository" />
+    </PageScaffold>
   );
 }
 

@@ -9,11 +9,13 @@ function SidebarLogo({
 }: SidebarLogoProps) {
   return (
     <div
-      className={`flex items-center border-b border-slate-800 p-6 transition-all duration-300 ${
+      className={`flex items-center border-b border-[#edf0f4] p-6 transition-all duration-300 ${
         collapsed ? "justify-center" : "gap-3"
       }`}
     >
-      <Shield className="h-9 w-9 shrink-0 text-cyan-400" />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1264d8] text-white">
+        <Shield className="h-5 w-5" />
+      </div>
 
       <div
         className={`overflow-hidden transition-all duration-300 ${
@@ -26,8 +28,8 @@ function SidebarLogo({
           Project Aegis
         </h1>
 
-        <p className="whitespace-nowrap text-xs text-slate-400">
-          AI Software QA Platform
+          <p className="whitespace-nowrap text-xs text-[#667085]">
+          Software quality workspace
         </p>
       </div>
     </div>

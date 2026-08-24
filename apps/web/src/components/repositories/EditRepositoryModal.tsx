@@ -61,7 +61,7 @@ function EditRepositoryModal({
       />
 
       <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
+        <div className="flex h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
           <div className="flex items-center justify-between border-b border-slate-800 px-6 py-5">
             <h2 className="text-xl font-semibold">
               Edit Repository
@@ -75,7 +75,7 @@ function EditRepositoryModal({
             </button>
           </div>
 
-          <div className="p-6">
+          <div className="flex-1 overflow-y-auto p-6">
             <RepositoryForm<UpdateRepositoryInput>
               key={currentRepository.id}
               initialData={currentRepository}

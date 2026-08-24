@@ -35,3 +35,11 @@ export type RepositoryQuery = {
   provider?: RepositoryProvider;
   status?: RepositoryStatus;
 };
+
+export type IndexRepositoryResult = {
+  repositoryId: string;
+  indexedFiles: number;
+  indexedChunks: number;
+  storedVectors: number;
+  durationMs: number;
+};

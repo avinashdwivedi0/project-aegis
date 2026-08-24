@@ -1,33 +1,46 @@
-import { Routes, Route } from "react-router-dom";
+import {
+  Route,
+  Routes,
+} from "react-router-dom";
 
-import MainLayout from "@/layouts/MainLayout";
 import DashboardLayout from "@/layouts/DashboardLayout";
+import MainLayout from "@/layouts/MainLayout";
 
-import ProtectedRoute from "./ProtectedRoute";
-
+import AnalysisPage from "@/pages/AnalysisPage";
+import ChatPage from "@/pages/ChatPage";
+import DashboardPage from "@/pages/DashboardPage";
 import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
-import DashboardPage from "@/pages/DashboardPage";
-import ProjectsPage from "@/pages/ProjectsPage";
-import RepositoryPage from "@/pages/RepositoryPage";
-import AnalysisPage from "@/pages/AnalysisPage";
-import TestingPage from "@/pages/TestingPage";
-import ReportsPage from "@/pages/ReportsPage";
 import MemoryPage from "@/pages/MemoryPage";
-import SettingsPage from "@/pages/SettingsPage";
 import NotFoundPage from "@/pages/NotFoundPage";
+import ProjectsPage from "@/pages/ProjectsPage";
+import RegisterPage from "@/pages/RegisterPage";
+import ReportsPage from "@/pages/ReportsPage";
+import RepositoryDetailsPage from "@/pages/RepositoryDetailsPage";
+import RepositoryPage from "@/pages/RepositoryPage";
+import SettingsPage from "@/pages/SettingsPage";
+import TestingPage from "@/pages/TestingPage";
+
+import ProtectedRoute from "./ProtectedRoute";
 
 function AppRouter() {
   return (
     <Routes>
       {/* Public */}
-      <Route element={<MainLayout />}>
-        <Route path="/" element={<HomePage />} />
+
+      <Route
+        element={<MainLayout />}
+      >
+        <Route
+          path="/"
+          element={<HomePage />}
+        />
+
         <Route
           path="/login"
           element={<LoginPage />}
         />
+
         <Route
           path="/register"
           element={<RegisterPage />}
@@ -35,53 +48,94 @@ function AppRouter() {
       </Route>
 
       {/* Protected */}
-      <Route element={<ProtectedRoute />}>
-        <Route element={<DashboardLayout />}>
+
+      <Route
+        element={
+          <ProtectedRoute />
+        }
+      >
+        <Route
+          element={
+            <DashboardLayout />
+          }
+        >
           <Route
             path="/dashboard"
-            element={<DashboardPage />}
+            element={
+              <DashboardPage />
+            }
           />
 
           <Route
             path="/projects"
-            element={<ProjectsPage />}
+            element={
+              <ProjectsPage />
+            }
           />
 
           <Route
             path="/projects/:projectId/repositories"
-            element={<RepositoryPage />}
+            element={
+              <RepositoryPage />
+            }
+          />
+
+          <Route
+            path="/projects/:projectId/repositories/:repositoryId"
+            element={
+              <RepositoryDetailsPage />
+            }
+          />
+
+          <Route
+            path="/projects/:projectId/repositories/:repositoryId/chat"
+            element={
+              <ChatPage />
+            }
           />
 
           <Route
             path="/analysis"
-            element={<AnalysisPage />}
+            element={
+              <AnalysisPage />
+            }
           />
 
           <Route
             path="/testing"
-            element={<TestingPage />}
+            element={
+              <TestingPage />
+            }
           />
 
           <Route
             path="/reports"
-            element={<ReportsPage />}
+            element={
+              <ReportsPage />
+            }
           />
 
           <Route
             path="/memory"
-            element={<MemoryPage />}
+            element={
+              <MemoryPage />
+            }
           />
 
           <Route
             path="/settings"
-            element={<SettingsPage />}
+            element={
+              <SettingsPage />
+            }
           />
         </Route>
       </Route>
 
       <Route
         path="*"
-        element={<NotFoundPage />}
+        element={
+          <NotFoundPage />
+        }
       />
     </Routes>
   );

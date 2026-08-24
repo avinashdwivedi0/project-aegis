@@ -31,9 +31,9 @@ function UserMenu() {
     <div className="relative">
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-slate-800"
+        className="flex items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-[#f3f6fa]"
       >
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-cyan-500 font-bold text-white">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#172033] text-sm font-bold text-white">
           {initials}
         </div>
 
@@ -42,7 +42,7 @@ function UserMenu() {
             {user?.name}
           </p>
 
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-[#667085]">
             {user?.role}
           </p>
         </div>
@@ -51,9 +51,9 @@ function UserMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-3 w-64 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+        <div className="absolute right-0 mt-3 w-64 overflow-hidden rounded-lg border border-[#dfe4eb] bg-white text-[#344054] shadow-xl">
           <button
-            className="flex w-full items-center gap-3 px-5 py-4 transition hover:bg-slate-800"
+            className="flex w-full items-center gap-3 px-5 py-4 transition hover:bg-[#f3f6fa]"
             onClick={() => {
               navigate("/settings");
               setOpen(false);
@@ -64,7 +64,7 @@ function UserMenu() {
           </button>
 
           <button
-            className="flex w-full items-center gap-3 px-5 py-4 transition hover:bg-slate-800"
+            className="flex w-full items-center gap-3 px-5 py-4 transition hover:bg-[#f3f6fa]"
             onClick={() => {
               navigate("/settings");
               setOpen(false);
@@ -74,10 +74,10 @@ function UserMenu() {
             Settings
           </button>
 
-          <div className="border-t border-slate-800" />
+          <div className="border-t border-[#edf0f4]" />
 
           <button
-            className="flex w-full items-center gap-3 px-5 py-4 text-red-400 transition hover:bg-red-500/10"
+            className="flex w-full items-center gap-3 px-5 py-4 text-[#b42318] transition hover:bg-[#fff1f0]"
             onClick={handleLogout}
           >
             <LogOut size={18} />

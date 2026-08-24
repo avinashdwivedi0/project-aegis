@@ -5,7 +5,7 @@ import HamburgerButton from "@/components/dashboard/HamburgerButton";
 
 function Topbar() {
   return (
-    <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-800 bg-slate-950/80 px-4 backdrop-blur sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-[#dfe4eb] bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
       {/* Left */}
       <div className="flex items-center gap-4">
         <HamburgerButton />
@@ -14,7 +14,7 @@ function Topbar() {
           <SearchBar />
         </div>
 
-        <h2 className="text-lg font-semibold md:hidden">
+          <h2 className="text-lg font-semibold text-[#172033] md:hidden">
           Dashboard
         </h2>
       </div>

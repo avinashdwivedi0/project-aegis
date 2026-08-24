@@ -15,5 +15,8 @@
     "lint": "echo \"Lint configuration pending\"",
     "format": "echo \"Formatter configuration pending\"",
     "test": "echo \"Test configuration pending\""
+  },
+  "dependencies": {
+    "@google/genai": "^2.13.0"
   }
 }
