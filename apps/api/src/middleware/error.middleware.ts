@@ -37,8 +37,13 @@ export function errorMiddleware(
 
   console.error(err);
 
+  const message =
+    err instanceof Error
+      ? err.message
+      : "Internal Server Error";
+
   return res.status(500).json({
     success: false,
-    message: "Internal Server Error",
+    message,
   });
 }

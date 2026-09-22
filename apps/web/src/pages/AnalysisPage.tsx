@@ -1,8 +1,13 @@
 import { Activity, Bot, Clock3, ShieldCheck } from "lucide-react";
 
 import { EmptyState, PageScaffold } from "@/components/ui/PageScaffold";
+import FindingsDashboard from "@/components/analysis/FindingsDashboard";
+import { useSearchParams } from "react-router-dom";
+import AnalysisProgress from "@/components/analysis/AnalysisProgress";
 
 function AnalysisPage() {
+  const [searchParams] = useSearchParams();
+  const runId = searchParams.get("runId");
   const cards = [
     [Activity, "Ready to analyze", "Choose a repository to begin a new assessment."],
     [ShieldCheck, "Quality signals", "Security, reliability, and maintainability checks."],
@@ -20,7 +25,9 @@ function AnalysisPage() {
           </div>
         ))}
       </div>
-      <EmptyState icon={Bot} title="No analysis runs yet" description="Connect a repository and launch your first quality assessment from the repository workspace." action="View repositories" />
+      {runId && <FindingsDashboard runId={runId} />}
+      {runId && <AnalysisProgress runId={runId} />}
+      <EmptyState icon={Bot} title="No analysis runs yet" description="Connect a repository and launch your first quality assessment from the repository workspace." action="View repositories" onAction={() => window.location.assign("/projects")} />
     </PageScaffold>
   );
 }

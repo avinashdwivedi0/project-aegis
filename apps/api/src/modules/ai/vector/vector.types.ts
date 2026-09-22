@@ -13,6 +13,7 @@ export interface StoredVector
 
 export interface SearchOptions {
   repositoryId: string;
+  query?: string;
   embedding: number[];
   limit?: number;
 }

@@ -1,0 +1,16 @@
+{
+  "name": "aegis-fixture-typescript-quality",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "node --test",
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@typescript-eslint/parser": "8.18.0",
+    "eslint": "9.17.0",
+    "typescript": "5.7.2"
+  }
+}

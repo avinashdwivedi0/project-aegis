@@ -1,13 +1,21 @@
+import dotenv from "dotenv";
+
+dotenv.config();
+
 export const aiConfig = {
-  apiKey: process.env.GEMINI_API_KEY ?? "",
+  apiKey: (process.env.GROQ_API_KEY ?? "").trim(),
 
   chatModel:
-    process.env.GEMINI_CHAT_MODEL ??
-    "gemini-3.6-flash",
+    (process.env.GROQ_CHAT_MODEL ?? "openai/gpt-oss-120b").trim(),
+
+  embeddingProvider:
+    (process.env.EMBEDDING_PROVIDER ?? "ollama").trim().toLowerCase(),
 
   embeddingModel:
-    process.env.GEMINI_EMBED_MODEL ??
-    "gemini-embedding-001",
+    (process.env.EMBEDDING_MODEL ?? "nomic-embed-text").trim(),
+
+  ollamaBaseUrl:
+    (process.env.OLLAMA_BASE_URL ?? "http://127.0.0.1:11434").trim(),
 
   retrievalLimit: 5,
 

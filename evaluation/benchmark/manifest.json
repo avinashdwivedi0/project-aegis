@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "phase9-v1",
+  "description": "Versioned benchmark manifest for reproducible Project Aegis evaluation.",
+  "repositories": [
+    {
+      "id": "fixture-typescript-quality",
+      "source": "local-fixture",
+      "version": "v1",
+      "path": "evaluation/benchmark/projects/fixture-typescript-quality",
+      "language": "typescript",
+      "categories": ["code-quality", "security"],
+      "groundTruthFindingIds": ["fixture/no-eval", "fixture/secret-token"],
+      "commands": ["pnpm install --frozen-lockfile", "pnpm run build", "pnpm run lint", "pnpm test"],
+      "baselineCommands": ["pnpm run build", "pnpm run lint", "pnpm test"],
+      "conditions": "Run with the repository's pinned toolchain and no network access."
+    },
+    {
+      "id": "fixture-node-dependencies",
+      "source": "local-fixture",
+      "version": "v1",
+      "path": "evaluation/benchmark/projects/fixture-node-dependencies",
+      "language": "typescript",
+      "categories": ["dependency", "tests"],
+      "groundTruthFindingIds": ["fixture/vulnerable-package", "fixture/failing-test"],
+      "commands": ["pnpm install --frozen-lockfile", "pnpm test"],
+      "baselineCommands": ["pnpm test"],
+      "conditions": "Run with the repository's pinned toolchain and no network access."
+    }
+  ],
+  "baselines": [
+    "deterministic-tools",
+    "deterministic-tools-plus-single-model",
+    "deterministic-tools-plus-specialized-agents"
+  ],
+  "metrics": [
+    "precision",
+    "recall",
+    "f1",
+    "repairAcceptanceRate",
+    "repairValidationPassRate",
+    "regressionRate"
+  ]
+}

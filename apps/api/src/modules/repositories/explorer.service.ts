@@ -2,6 +2,8 @@ import fs from "fs/promises";
 import path from "path";
 
 import { prisma } from "../../config/prisma";
+import { ApiError } from "../../utils/ApiError";
+import { resolveWorkspacePath } from "./workspace-path";
 
 export interface RepositoryTextFile {
   name: string;
@@ -104,12 +106,13 @@ export class ExplorerService {
     }
 
     if (!repository.workspacePath) {
-      throw new Error(
-        "Repository has no workspace.",
+      throw new ApiError(
+        400,
+        "Repository has no workspace. Import or sync the repository before accessing files.",
       );
     }
 
-    const absolutePath = path.join(
+    const absolutePath = resolveWorkspacePath(
       repository.workspacePath,
       filePath,
     );
@@ -147,8 +150,9 @@ export class ExplorerService {
     }
 
     if (!repository.workspacePath) {
-      throw new Error(
-        "Repository has no workspace.",
+      throw new ApiError(
+        400,
+        "Repository has no workspace. Import or sync the repository before indexing files.",
       );
     }
 

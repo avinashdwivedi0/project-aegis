@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "phase9-ai-pipeline-v1",
+  "provider": "ollama",
+  "model": "qwen2.5-coder:7b",
+  "timeoutMs": 180000,
+  "result": {
+    "contractVersion": "1.0",
+    "agentId": "test",
+    "agentVersion": "1.0",
+    "status": "completed",
+    "findings": [
+      {
+        "id": "stable-finding-id",
+        "title": "Mismatch in Expected Value",
+        "description": "The test case at 'test/failing.test.js:4-5' is expecting 4 to equal 5, which is a failure.",
+        "severity": "low",
+        "confidence": 0.5,
+        "evidenceIds": [
+          "fixture/failing-test"
+        ],
+        "filePath": "test/failing.test.js",
+        "lineStart": 4,
+        "lineEnd": 5,
+        "recommendation": "Review the logic at 'test/failing.test.js:4-5' to ensure the expected and actual values are correct.",
+        "repairRequired": true
+      }
+    ],
+    "summary": "One test case failed due to an expected value mismatch.",
+    "durationMs": 76023
+  }
+}

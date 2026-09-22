@@ -2,14 +2,21 @@ import { NextFunction, Request, Response } from "express";
 import { verifyToken } from "../utils/jwt";
 import { errorResponse } from "../utils/response";
 
-export interface AuthenticatedRequest<
-  P = Record<string, string>
-> extends Request<P> {
-  user: {
-    userId: string;
-    email: string;
-    role: "USER" | "ADMIN";
-  };
+export type AuthenticatedUser = {
+  userId: string;
+  email: string;
+  role: "USER" | "ADMIN";
+};
+
+declare global {
+  namespace Express {
+    interface Request {
+      user: AuthenticatedUser;
+    }
+  }
+}
+
+export interface AuthenticatedRequest<P = Record<string, string>> extends Request<P> {
 }
 
 export function authenticate(

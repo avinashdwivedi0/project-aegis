@@ -84,6 +84,10 @@ export class FileScannerService {
         withFileTypes: true,
       });
 
+    entries.sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+
     const result: FileNode[] = [];
 
     for (const entry of entries) {

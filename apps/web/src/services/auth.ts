@@ -16,6 +16,7 @@ export type User = {
   name: string;
   email: string;
   role: "USER" | "ADMIN";
+  preferences?: { defaultRef?: string; polling?: boolean };
 };
 
 export type AuthResponse = {
@@ -57,4 +58,9 @@ export async function getCurrentUser() {
 
 export function logout() {
   localStorage.removeItem("token");
+}
+
+export async function updatePreferences(preferences: { defaultRef: string; polling: boolean }) {
+  const response = await api.patch<{ data: { preferences: typeof preferences } }>("/auth/preferences", preferences);
+  return response.data.data.preferences;
 }

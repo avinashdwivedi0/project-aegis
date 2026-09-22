@@ -98,7 +98,16 @@ export class AuthService {
         email: true,
         role: true,
         createdAt: true,
+        preferences: true,
       },
+    });
+  }
+
+  static async updatePreferences(userId: string, preferences: { defaultRef?: string; polling?: boolean }) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { preferences },
+      select: { preferences: true },
     });
   }
 }

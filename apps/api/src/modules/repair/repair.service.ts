@@ -10,6 +10,8 @@
  *  - Track repair status & audit trail
  */
 
+import { FindingSeverity } from "@prisma/client";
+
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/ApiError";
 import type {
@@ -27,6 +29,7 @@ import { PatchGenerator } from "./patchGenerator";
 import { PatchValidator } from "./patchValidator";
 import { FileApplier } from "./fileApplier";
 import { RiskScorer } from "./riskScorer";
+import { GitHubService } from "../repositories/github.service";
 
 /* ------------------------------------------------------------------ */
 /* Helper: map Prisma → domain objects                                 */
@@ -403,13 +406,34 @@ export class RepairService {
     const job = await prisma.repairJob.findUnique({ where: { id: patch.repairJobId } });
     const repo = await prisma.repository.findUnique({ where: { id: job!.repositoryId } });
 
+    if (targetRepo && repo?.workspacePath) {
+      await GitHubService.createRepairBranch(repo.workspacePath, patch.patchId);
+    }
+
     // Apply in sandbox
-    const result = await FileApplier.apply({
+    let result = await FileApplier.apply({
       patchContent: patch.diffContent,
       repository: repo!,
       filePath: finding!.filePath,
       targetRepo,
     });
+
+    if (result.success && targetRepo && repo?.workspacePath) {
+      try {
+        const delivery = await GitHubService.commitRepairBranch(
+          repo.workspacePath,
+          finding!.filePath,
+          patch.patchId,
+        );
+        result = { ...result, output: `${result.output} Commit ${delivery.commit} created on ${delivery.branch}.` };
+      } catch (error) {
+        result = {
+          success: false,
+          output: result.output,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
 
     // Persist application result
     await prisma.patchApplication.create({
@@ -435,6 +459,44 @@ export class RepairService {
     return result;
   }
 
+  static async rejectPatch(patchId: string, ownerId: string) {
+    const patch = await this.getPatch(patchId, ownerId);
+    if (["PATCH_APPLIED_IN_WORKSPACE", "VALIDATED"].includes(patch.lifecycle)) {
+      throw new ApiError(400, "Validated or applied patches cannot be rejected");
+    }
+
+    await prisma.patch.update({
+      where: { id: patchId },
+      data: { lifecycle: "REJECTED" },
+    });
+    await prisma.finding.update({
+      where: { id: patch.findingId },
+      data: { status: "REJECTED" },
+    });
+    return { patchId, status: "REJECTED" as const };
+  }
+
+  static async createPullRequest(
+    patchId: string,
+    ownerId: string,
+    token: string,
+    title: string,
+    body: string,
+  ) {
+    const patch = await this.getPatch(patchId, ownerId);
+    if (patch.lifecycle !== "VALIDATED") {
+      throw new ApiError(400, "Patch must be VALIDATED before creating a pull request.");
+    }
+    const job = await prisma.repairJob.findUnique({ where: { id: patch.repairJobId } });
+    const repository = job
+      ? await prisma.repository.findUnique({ where: { id: job.repositoryId } })
+      : null;
+    if (!repository?.url) throw new ApiError(400, "A GitHub repository URL is required.");
+
+    const branch = `aegis/repair-${patch.patchId}`;
+    return GitHubService.createPullRequest(repository.url, branch, token, title, body);
+  }
+
   /* ---------------------- Helpers -------------------------- */
 
   /**
@@ -449,7 +511,7 @@ export class RepairService {
       // fallback: empty string – generator will still produce something
       return "";
     }
-    return file.content;
+    return file.content ?? "";
   }
 
   /**
@@ -560,6 +622,7 @@ export class RepairService {
     await prisma.finding.createMany({
       data: mockFindings.map((f) => ({
         ...f,
+        severity: f.severity as FindingSeverity,
         repairJobId: job.id,
       })),
     });

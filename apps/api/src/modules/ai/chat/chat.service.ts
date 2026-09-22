@@ -4,7 +4,7 @@ import type {
 } from "./chat.types";
 
 import { retrievalService } from "../retrieval/retrieval.service";
-import { geminiService } from "../gemini/gemini.service";
+import { groqService } from "../gemini/gemini.service";
 import { aiConfig } from "../../../config/ai.config";
 
 export class ChatService {
@@ -23,15 +23,39 @@ When possible:
 - Keep responses concise.
 `.trim();
 
+  private static readonly AI_UNAVAILABLE_MESSAGE =
+    "AI chat is currently unavailable because the configured AI provider is misconfigured or inaccessible. Check the Groq API key and model settings.";
+
+  private static isCasualMessage(message: string): boolean {
+    return /^(hi|hello|hey|good morning|good afternoon|good evening)[!.?\s]*$/i.test(
+      message.trim(),
+    );
+  }
+
   public async chat(
     request: ChatRequest,
   ): Promise<ChatResponse> {
-    const results =
-      await retrievalService.search({
-        repositoryId: request.repositoryId,
-        query: request.message,
-        limit: aiConfig.retrievalLimit,
-      });
+    const isCasualMessage =
+      ChatService.isCasualMessage(request.message);
+
+    let results = [] as Awaited<
+      ReturnType<typeof retrievalService.search>
+    >;
+
+    if (!isCasualMessage) {
+      try {
+        results = await retrievalService.search({
+          repositoryId: request.repositoryId,
+          query: request.message,
+          limit: aiConfig.retrievalLimit,
+        });
+      } catch (error) {
+        console.warn(
+          "Chat retrieval failed; continuing without repository context.",
+          error,
+        );
+      }
+    }
 
     const context =
       results.length === 0
@@ -46,7 +70,17 @@ ${chunk.content}`,
               "\n\n----------------------------------------\n\n",
             );
 
-    const prompt = `
+    const prompt = isCasualMessage
+      ? `
+You are Project Aegis AI. Respond briefly and naturally to this casual greeting.
+Do not claim repository information is missing because no repository context is needed.
+
+User Message:
+${request.message}
+
+Answer:
+`.trim()
+      : `
 ${ChatService.SYSTEM_PROMPT}
 
 Repository Context:
@@ -59,8 +93,29 @@ ${request.message}
 Answer:
 `.trim();
 
-    const answer =
-      await geminiService.generateText(prompt);
+    if (process.env.NODE_ENV !== "production") {
+      console.info(
+        "RAG Context",
+        JSON.stringify({
+          repositoryId: request.repositoryId,
+          query: request.message,
+          retrievedChunks: results.length,
+          contextCharacters: context.length,
+          promptCharacters: prompt.length,
+        }),
+      );
+    }
+
+    let answer = ChatService.AI_UNAVAILABLE_MESSAGE;
+
+    try {
+      answer = await groqService.generateText(prompt);
+    } catch (error) {
+      console.warn(
+        "Chat generation failed; returning provider-unavailable message.",
+        error,
+      );
+    }
 
     return {
       answer: answer.trim(),

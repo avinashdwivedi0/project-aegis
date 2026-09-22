@@ -4,6 +4,8 @@ export interface IndexRepositoryResult {
   indexedChunks: number;
   storedVectors: number;
   durationMs: number;
+  status?: "complete" | "partial";
+  error?: string;
 }
 
 export interface SearchRequest {

@@ -201,9 +201,15 @@ function RepositoryDetailsPage() {
   }
 
   function handleOpenWorkspace() {
-    toast.info(
-      "Open Workspace will be implemented in a future sprint."
-    );
+    const explorer =
+      document.getElementById(
+        "repository-workspace"
+      );
+
+    explorer?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }
 
   function handleDeleteWorkspace() {

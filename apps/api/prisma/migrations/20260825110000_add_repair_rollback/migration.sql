@@ -1,0 +1,3 @@
+-- Prisma migration metadata restored for local environment.
+-- The database schema for this migration was already applied in the project database.
+-- Keeping this file present prevents Prisma from failing on migration discovery.

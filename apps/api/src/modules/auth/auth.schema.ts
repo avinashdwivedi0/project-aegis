@@ -11,10 +11,19 @@ export const loginBodySchema = z.object({
   password: z.string().min(6),
 });
 
+export const preferencesBodySchema = z.object({
+  defaultRef: z.string().trim().min(1).max(200).default("HEAD"),
+  polling: z.boolean().default(true),
+}).strict();
+
 export const registerSchema = {
   body: registerBodySchema,
 };
 
 export const loginSchema = {
   body: loginBodySchema,
+};
+
+export const preferencesSchema = {
+  body: preferencesBodySchema,
 };

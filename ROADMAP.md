@@ -2,86 +2,86 @@
 
 ## Phase 0 --- Research and specification
 
--   [ ] Finalize project scope
--   [ ] Finalize PRD
--   [ ] Finalize SRS
--   [ ] Finalize architecture
--   [ ] Define threat model
--   [ ] Define evaluation methodology
--   [ ] Create benchmark strategy
+-   [x] Finalize project scope
+-   [x] Finalize PRD
+-   [x] Finalize SRS
+-   [x] Finalize architecture
+-   [x] Define threat model
+-   [x] Define evaluation methodology
+-   [x] Create benchmark strategy
 
 ## Phase 1 --- Repository and project ingestion
 
--   [ ] Project creation
--   [ ] ZIP upload
--   [ ] Safe extraction
--   [ ] Git repository ingestion
--   [ ] Project discovery
--   [ ] Workspace isolation
+-   [x] Project creation
+-   [x] ZIP upload
+-   [x] Safe extraction
+-   [x] Git repository ingestion
+-   [x] Project discovery
+-   [x] Workspace isolation
 
 ## Phase 2 --- Analysis foundation
 
--   [ ] Analysis job model
--   [ ] Job queue/orchestrator
--   [ ] Tool runner
--   [ ] Evidence storage
--   [ ] Finding schema
--   [ ] Progress streaming
+-   [x] Analysis job model
+-   [x] Job queue/orchestrator
+-   [x] Tool runner
+-   [x] Evidence storage
+-   [x] Finding schema
+-   [x] Progress streaming
 
 ## Phase 3 --- Deterministic quality checks
 
--   [ ] Linting
--   [ ] Type checking
--   [ ] Dependency audit
--   [ ] Security scanner integration
--   [ ] Test discovery/execution
+-   [x] Linting
+-   [x] Type checking
+-   [x] Dependency audit
+-   [x] Security scanner integration
+-   [x] Test discovery/execution
 
 ## Phase 4 --- AI agents
 
--   [ ] Project Analyzer
--   [ ] Code Quality Agent
--   [ ] Security Agent
--   [ ] Dependency Agent
--   [ ] Test Agent
--   [ ] API Agent
--   [ ] UI/Accessibility Agent
--   [ ] Performance Agent
+-   [x] Project Analyzer
+-   [x] Code Quality Agent
+-   [x] Security Agent
+-   [x] Dependency Agent
+-   [x] Test Agent
+-   [x] API Agent
+-   [x] UI/Accessibility Agent
+-   [x] Performance Agent
 
 ## Phase 5 --- Repair engine
 
--   [ ] Finding-to-context retrieval
--   [ ] Patch generation
--   [ ] Diff viewer
--   [ ] Patch application in temporary workspace
--   [ ] Regression validation
--   [ ] Repair status tracking
+-   [x] Finding-to-context retrieval
+-   [x] Patch generation
+-   [x] Diff viewer
+-   [x] Patch application in temporary workspace
+-   [x] Regression validation
+-   [x] Repair status tracking
 
 ## Phase 6 --- Dashboard and reporting
 
--   [ ] Project dashboard
--   [ ] Analysis progress
--   [ ] Finding list
--   [ ] Finding details
--   [ ] Quality scores
--   [ ] Diff viewer
--   [ ] Final report
+-   [x] Project dashboard
+-   [x] Analysis progress
+-   [x] Finding list
+-   [x] Finding details
+-   [x] Quality scores
+-   [x] Diff viewer
+-   [x] Final report
 
 ## Phase 7 --- GitHub integration
 
--   [ ] Repository connection
--   [ ] Branch workflow
--   [ ] Pull request creation
--   [ ] Review summary
+-   [x] Repository connection
+-   [x] Branch workflow
+-   [x] Pull request creation
+-   [x] Review summary
 
 ## Phase 8 --- Evaluation
 
--   [ ] Build benchmark
+-   [x] Build benchmark manifest and seeded fixture
 -   [ ] Run baseline tools
 -   [ ] Run AI pipeline
--   [ ] Measure metrics
+-   [x] Implement metric calculation and gate
 -   [ ] Analyze false positives
 -   [ ] Analyze repair success
--   [ ] Document limitations
+-   [x] Document evaluation protocol and limitations
 
 ## Phase 9 --- Final-year deliverables
 

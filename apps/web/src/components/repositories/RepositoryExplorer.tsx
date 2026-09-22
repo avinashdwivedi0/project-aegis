@@ -36,7 +36,7 @@ function RepositoryExplorer({
   }
 
   return (
-    <div className="grid h-175 grid-cols-12 overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+    <div id="repository-workspace" className="grid h-175 grid-cols-12 overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
       {/* Left Sidebar */}
 
       <div className="col-span-4 overflow-y-auto border-r border-slate-800">

@@ -2,10 +2,19 @@ import { Response } from "express";
 
 export function successResponse(
   res: Response,
-  message: string,
-  data: unknown = null,
+  messageOrData: string | unknown,
+  dataOrMessage: unknown = null,
   status = 200
 ) {
+  const message = typeof messageOrData === "string"
+    ? messageOrData
+    : typeof dataOrMessage === "string"
+      ? dataOrMessage
+      : "";
+  const data = typeof messageOrData === "string"
+    ? dataOrMessage
+    : messageOrData;
+
   return res.status(status).json({
     success: true,
     message,

@@ -3,6 +3,7 @@ import { AuthController } from "./auth.controller";
 import { validate } from "../../middleware/validate.middleware";
 import {
   loginSchema,
+  preferencesSchema,
   registerSchema,
 } from "./auth.schema";
 import { authenticate } from "../../middleware/auth.middleware";
@@ -26,6 +27,13 @@ router.get(
   "/me",
   authenticate,
   AuthController.me
+);
+
+router.patch(
+  "/preferences",
+  authenticate,
+  validate(preferencesSchema),
+  AuthController.updatePreferences,
 );
 
 export default router;

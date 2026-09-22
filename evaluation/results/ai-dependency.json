@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "phase9-ai-pipeline-v1",
+  "provider": "ollama",
+  "model": "qwen2.5-coder:7b",
+  "timeoutMs": 180000,
+  "startedAt": "2026-09-21T06:50:36.820Z",
+  "completedAt": "2026-09-21T06:51:45.708Z",
+  "result": {
+    "contractVersion": "1.0",
+    "agentId": "dependency",
+    "agentVersion": "1.0",
+    "status": "completed",
+    "findings": [
+      {
+        "id": "stable-finding-id",
+        "title": "High Severity Vulnerability in lodash",
+        "description": "The project uses lodash 4.17.20, which has a known high severity vulnerability (GHSA-35jh-r3h4-6jhm) affecting the project.",
+        "severity": "high",
+        "confidence": 1,
+        "evidenceIds": [
+          "fixture/vulnerable-package"
+        ],
+        "filePath": "relative/path.ts",
+        "lineStart": 1,
+        "lineEnd": 1,
+        "recommendation": "Update lodash to a version that is not affected by the GHSA-35jh-r3h4-6jhm vulnerability.",
+        "repairRequired": true
+      }
+    ],
+    "summary": "The project contains a high severity vulnerability in lodash. This vulnerability has been known for some time and can lead to potential security risks. It is recommended to update lodash to a version that is not affected by this vulnerability.",
+    "durationMs": 68878
+  }
+}

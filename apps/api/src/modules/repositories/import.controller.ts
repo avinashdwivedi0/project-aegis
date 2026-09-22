@@ -54,9 +54,18 @@ export class ImportController {
         ? req.params.id[0]
         : req.params.id;
 
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "A ZIP archive is required in the archive field.",
+        });
+      }
+
       const result =
         await ImportService.importFromZip(
           repositoryId,
+          req.file.path,
         );
 
       return res.status(200).json({

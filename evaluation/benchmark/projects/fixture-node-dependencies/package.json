@@ -1,0 +1,11 @@
+{
+  "name": "aegis-fixture-node-dependencies",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "lodash": "4.17.20"
+  }
+}

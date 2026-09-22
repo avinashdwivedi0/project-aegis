@@ -1,0 +1,19 @@
+{
+  "groundTruthFindingIds": [
+    "fixture/no-eval",
+    "fixture/secret-token",
+    "fixture/vulnerable-package",
+    "fixture/failing-test"
+  ],
+  "detectedFindingIds": [
+    "fixture/no-eval",
+    "fixture/secret-token",
+    "fixture/vulnerable-package",
+    "fixture/unknown"
+  ],
+  "repairs": [
+    { "findingId": "fixture/no-eval", "accepted": true, "validationPassed": true, "regression": false },
+    { "findingId": "fixture/secret-token", "accepted": false, "validationPassed": false, "regression": false },
+    { "findingId": "fixture/vulnerable-package", "accepted": true, "validationPassed": false, "regression": true }
+  ]
+}

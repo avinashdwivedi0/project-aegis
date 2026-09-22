@@ -8,6 +8,8 @@ import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { retrievalService } from "../ai/retrieval/retrieval.service";
 
+import { GitHubService } from "./github.service";
+
 import type {
   CreateRepositoryInput,
   RepositoryQuery,
@@ -15,6 +17,15 @@ import type {
 } from "./repository.types";
 
 export class RepositoryService {
+  static async findForOwner(repositoryId: string, ownerId: string) {
+    const repository = await prisma.repository.findFirst({
+      where: { id: repositoryId, project: { ownerId } },
+      select: { id: true },
+    });
+    if (!repository) throw new ApiError(404, "Repository not found or access denied.");
+    return repository;
+  }
+
   private static async findProject(
     projectId: string,
     ownerId: string
@@ -255,10 +266,17 @@ export class RepositoryService {
     repositoryId: string,
     ownerId: string
   ) {
-    await this.findRepository(
+    const repository = await this.findRepository(
       repositoryId,
       ownerId
     );
+
+    if (!repository.workspacePath) {
+      throw new ApiError(
+        400,
+        "Repository has no workspace. Import a repository before indexing it.",
+      );
+    }
 
     await prisma.repository.update({
       where: {
@@ -306,10 +324,24 @@ export class RepositoryService {
     repositoryId: string,
     ownerId: string
   ) {
-    await this.findRepository(
-      repositoryId,
-      ownerId
-    );
+    const repository =
+      await this.findRepository(
+        repositoryId,
+        ownerId
+      );
+
+    if (repository.workspacePath) {
+      try {
+        await GitHubService.deleteRepository(
+          repository.workspacePath
+        );
+      } catch (error) {
+        console.error(
+          "Repository workspace cleanup failed.",
+          error
+        );
+      }
+    }
 
     await prisma.repository.delete({
       where: {

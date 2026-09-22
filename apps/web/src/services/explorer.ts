@@ -25,3 +25,8 @@ export async function getRepositoryFileContent(
 
   return response.data.data;
 }
+
+export async function searchRepositoryMemory(repositoryId: string, query: string) {
+  const response = await api.get(`/repositories/${repositoryId}/search`, { params: { q: query } });
+  return response.data.data as Array<{ filePath: string; chunkIndex: number; content: string; score: number }>;
+}

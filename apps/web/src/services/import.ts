@@ -22,12 +22,22 @@ export async function importGitHubRepository(
 }
 
 export async function importZipRepository(
-  repositoryId: string
+  repositoryId: string,
+  archive: File,
 ) {
+  const formData = new FormData();
+  formData.append("archive", archive);
+
   const response = await api.post<
     ImportResponse
   >(
-    `/repositories/${repositoryId}/import/zip`
+    `/repositories/${repositoryId}/import/zip`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    },
   );
 
   return response.data;

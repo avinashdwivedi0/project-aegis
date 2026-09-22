@@ -1,4 +1,5 @@
 import { RepositoryStatus } from "@prisma/client";
+import fs from "fs/promises";
 
 import { prisma } from "../../config/prisma";
 
@@ -108,7 +109,8 @@ export class ImportService {
   }
 
   static async importFromZip(
-    repositoryId: string
+    repositoryId: string,
+    archivePath: string,
   ) {
     const repository =
       await prisma.repository.findUnique({
@@ -134,29 +136,62 @@ export class ImportService {
     });
 
     try {
-      /**
-       * ZIP import pipeline will be implemented
-       * in Sprint G.
-       *
-       * Current ZipService only exists as a stub
-       * and does not yet support extraction.
-       */
+      const workspace =
+        await ZipService.extract(
+          archivePath,
+        );
 
-      await prisma.repository.update({
-        where: {
-          id: repositoryId,
-        },
-        data: {
-          status:
-            RepositoryStatus.FAILED,
-        },
-      });
+      try {
+        const tree =
+          await FileScannerService.scan(
+            workspace,
+          );
 
-      return {
-        success: false,
-        message:
-          "ZIP import is not implemented yet.",
-      };
+        const indexedFiles =
+          await FileIndexService.index(
+            repositoryId,
+            tree,
+          );
+
+        await prisma.repository.update({
+          where: {
+            id: repositoryId,
+          },
+          data: {
+            provider: "ZIP",
+            workspacePath: workspace,
+          },
+        });
+
+        const indexingResult =
+          await retrievalService.indexRepository(
+            repositoryId,
+          );
+
+        await prisma.repository.update({
+          where: {
+            id: repositoryId,
+          },
+          data: {
+            status:
+              RepositoryStatus.INDEXED,
+          },
+        });
+
+        return {
+          success: true,
+          workspace,
+          indexedFiles,
+          indexingResult,
+          message:
+            "ZIP repository imported and indexed successfully.",
+        };
+      } catch (error) {
+        await ZipService.cleanup(
+          workspace,
+        );
+        throw error;
+      }
     } catch (error) {
       await prisma.repository.update({
         where: {
@@ -169,6 +204,10 @@ export class ImportService {
       });
 
       throw error;
+    } finally {
+      await fs.rm(archivePath, {
+        force: true,
+      });
     }
   }
 }

@@ -56,4 +56,12 @@ export class AuthController {
       );
     }
   );
+
+  static updatePreferences = asyncHandler(
+    async (req: Request, res: Response) => {
+      const authReq = req as AuthenticatedRequest;
+      const preferences = await AuthService.updatePreferences(authReq.user.userId, req.body);
+      return successResponse(res, "Preferences updated successfully", preferences);
+    }
+  );
 }

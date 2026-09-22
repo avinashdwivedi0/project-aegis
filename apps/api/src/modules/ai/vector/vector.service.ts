@@ -85,7 +85,7 @@ export class VectorService {
   ): Promise<SearchResult[]> {
     const embedding = `[${options.embedding.join(",")}]`;
 
-    const rows =
+    const candidateRows =
       await prisma.$queryRawUnsafe<
         {
           id: string;
@@ -93,6 +93,7 @@ export class VectorService {
           filePath: string;
           chunkIndex: number;
           content: string;
+          distance: number;
           score: number;
         }[]
       >(
@@ -103,6 +104,7 @@ export class VectorService {
           "filePath",
           "chunkIndex",
           content,
+          embedding <=> $1::vector AS distance,
           1 - (embedding <=> $1::vector) AS score
         FROM repository_embeddings
         WHERE "repositoryId" = $2
@@ -111,8 +113,66 @@ export class VectorService {
         `,
         embedding,
         options.repositoryId,
-        options.limit ?? 5,
+        80,
       );
+
+    const query = options.query?.toLowerCase() ?? "";
+    const isArchitectureQuery =
+      /architecture|main modules?|how .* work together|overall structure|entry point/i.test(
+        query,
+      );
+    const normalizedQuery = query.replaceAll("\\", "/");
+
+    const rankedRows = [...candidateRows].sort((left, right) => {
+      const score = (row: (typeof candidateRows)[number]) => {
+        const filePath = row.filePath.toLowerCase().replaceAll("\\", "/");
+        const exactPathMatch =
+          normalizedQuery.includes(filePath) ||
+          normalizedQuery.includes(filePath.replaceAll("/", "\\"));
+        const metadataPenalty =
+          isArchitectureQuery &&
+          /(package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/i.test(filePath)
+            ? 0.12
+            : 0;
+
+        return row.score + (exactPathMatch ? 1 : 0) - metadataPenalty;
+      };
+
+      return score(right) - score(left);
+    });
+
+    const rows = rankedRows.filter(
+      (row, index, candidates) =>
+        candidates.findIndex(
+          (candidate) =>
+            candidate.filePath === row.filePath,
+        ) === index,
+    ).slice(0, options.limit ?? 5);
+
+    if (process.env.NODE_ENV !== "production") {
+      const candidateCount = await prisma.repositoryEmbedding.count({
+        where: {
+          repositoryId: options.repositoryId,
+        },
+      });
+
+      console.info(
+        "RAG Retrieval",
+        JSON.stringify({
+          repositoryId: options.repositoryId,
+          queryEmbeddingDimension: options.embedding.length,
+          candidateCount,
+          candidateRows: candidateRows.length,
+          retrievedCount: rows.length,
+          topResults: rows.map((row) => ({
+            filePath: row.filePath,
+            chunkIndex: row.chunkIndex,
+            distance: row.distance,
+            similarity: row.score,
+          })),
+        }),
+      );
+    }
 
     return rows.map((row) => ({
       score: row.score,

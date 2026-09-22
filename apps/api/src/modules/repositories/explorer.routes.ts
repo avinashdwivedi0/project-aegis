@@ -12,6 +12,12 @@ router.get(
 );
 
 router.get(
+  "/:id/search",
+  authenticate,
+  ExplorerController.search,
+);
+
+router.get(
   "/:id/file",
   authenticate,
   ExplorerController.getFileContent

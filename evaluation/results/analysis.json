@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "phase9-analysis-v1",
+  "generatedAt": "2026-09-21T06:40:59.020Z",
+  "baseline": {
+    "commands": 4,
+    "passed": 2,
+    "failed": 2,
+    "unavailable": 0,
+    "intentionalFailures": 1
+  },
+  "ai": {
+    "provider": "ollama",
+    "model": "qwen2.5-coder:7b",
+    "status": "completed",
+    "errorCode": null,
+    "findingsProduced": 2,
+    "comparableDetectionMetrics": true,
+    "detectionMetrics": {
+      "truePositives": 2,
+      "falsePositives": 0,
+      "falseNegatives": 0,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
+    }
+  },
+  "conclusions": [
+    "The deterministic baseline contains one passing build and one intentional failing test.",
+    "The quality fixture's ESLint command detects the seeded no-eval issue after isolated dependencies are installed.",
+    "The AI pipeline returned schema-valid findings for the two quality-fixture ground-truth issues; this is a single-fixture detection result, not a general performance claim."
+  ],
+  "limitations": [
+    "Only two local fixtures were executed.",
+    "The AI detection comparison covers only the TypeScript quality fixture.",
+    "The metric fixture validates implementation arithmetic and is not an experimental result."
+  ]
+}

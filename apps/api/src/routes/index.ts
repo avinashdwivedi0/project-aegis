@@ -8,6 +8,10 @@ import importRoutes from "../modules/repositories/import.routes";
 import explorerRoutes from "../modules/repositories/explorer.routes";
 
 import aiRoutes from "../modules/ai";
+import analysisRoutes from "../modules/analysis/analysis.routes";
+import findingRoutes from "../modules/analysis/finding.routes";
+import repairRoutes from "../modules/repair/repair.routes";
+import reportRoutes from "../modules/report/report.routes";
 
 const router = Router();
 
@@ -69,5 +73,10 @@ router.use("/repositories", explorerRoutes);
 */
 
 router.use("/", aiRoutes);
+
+router.use("/analyses", analysisRoutes);
+router.use("/analyses", findingRoutes);
+router.use("/analyses", reportRoutes);
+router.use("/repairs", repairRoutes);
 
 export default router;
