@@ -20,7 +20,11 @@ import ChatPage from "./pages/ChatPage";
 import AnalysisPage from "./pages/AnalysisPage";
 import TestingPage from "./pages/TestingPage";
 import ReportsPage from "./pages/ReportsPage";
+import TestOperationsPage from "./pages/TestOperationsPage";
+import SelfHealingPage from "./pages/SelfHealingPage";
 import MemoryPage from "./pages/MemoryPage";
+import AuditLogPage from "./pages/AuditLogPage";
+import CiIntegrationPage from "./pages/CiIntegrationPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 
@@ -118,6 +122,16 @@ function App() {
             />
 
             <Route
+              path="/test-operations"
+              element={<TestOperationsPage />}
+            />
+
+            <Route
+              path="/self-healing"
+              element={<SelfHealingPage />}
+            />
+
+            <Route
               path="/memory"
               element={
                 <MemoryPage />
@@ -128,6 +142,19 @@ function App() {
               path="/settings"
               element={
                 <SettingsPage />
+              }
+            />
+
+            <Route
+              path="/audit"
+              element={
+                <AuditLogPage />
+              }
+            />
+            <Route
+              path="/ci-integration"
+              element={
+                <CiIntegrationPage />
               }
             />
           </Route>

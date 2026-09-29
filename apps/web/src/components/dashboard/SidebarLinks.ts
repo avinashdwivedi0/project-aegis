@@ -4,8 +4,11 @@ import {
   Bot,
   FlaskConical,
   FileBarChart,
+  Activity,
   BrainCircuit,
   Settings,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 
 export const sidebarLinks = [
@@ -40,6 +43,16 @@ export const sidebarLinks = [
     path: "/reports",
   },
   {
+    title: "Test Intelligence",
+    icon: Activity,
+    path: "/test-operations",
+  },
+  {
+    title: "Self-Healing",
+    icon: ShieldAlert,
+    path: "/self-healing",
+  },
+  {
     title: "Memory",
     icon: BrainCircuit,
     path: "/memory",
@@ -48,5 +61,15 @@ export const sidebarLinks = [
     title: "Settings",
     icon: Settings,
     path: "/settings",
+  },
+  {
+    title: "CI/CD Integration",
+    icon: FileBarChart,
+    path: "/ci-integration",
+  },
+  {
+    title: "Audit Log",
+    icon: ShieldCheck,
+    path: "/audit",
   },
 ];

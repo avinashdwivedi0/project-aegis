@@ -12,6 +12,9 @@ import analysisRoutes from "../modules/analysis/analysis.routes";
 import findingRoutes from "../modules/analysis/finding.routes";
 import repairRoutes from "../modules/repair/repair.routes";
 import reportRoutes from "../modules/report/report.routes";
+import auditRoutes from "../modules/audit/audit.routes";
+import { guardrailRoutes } from "../modules/guardrail/index";
+import ciIntegrationRoutes from "../modules/ci/ci-integration.routes";
 
 const router = Router();
 
@@ -78,5 +81,8 @@ router.use("/analyses", analysisRoutes);
 router.use("/analyses", findingRoutes);
 router.use("/analyses", reportRoutes);
 router.use("/repairs", repairRoutes);
+router.use("/audits", auditRoutes);
+router.use("/projects", guardrailRoutes);
+router.use("/ci", ciIntegrationRoutes);
 
 export default router;

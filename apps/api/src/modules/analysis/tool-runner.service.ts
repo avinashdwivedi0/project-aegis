@@ -4,6 +4,7 @@ import path from "path";
 
 export type ToolCommand =
   | "node"
+  | "npx"
   | "npm"
   | "pnpm"
   | "python"
@@ -30,6 +31,7 @@ export type ToolRunResult = {
 
 const ALLOWED_COMMANDS: Record<ToolCommand, string> = {
   node: process.platform === "win32" ? "node.exe" : "node",
+  npx: process.platform === "win32" ? "npx.cmd" : "npx",
   npm: process.platform === "win32" ? "npm.cmd" : "npm",
   pnpm: process.platform === "win32" ? "pnpm.cmd" : "pnpm",
   python: process.platform === "win32" ? "python.exe" : "python3",

@@ -201,15 +201,14 @@ function RepositoryDetailsPage() {
   }
 
   function handleOpenWorkspace() {
-    const explorer =
-      document.getElementById(
-        "repository-workspace"
-      );
+    if (!projectId || !repositoryId) {
+      toast.error("Unable to open the testing workspace.");
+      return;
+    }
 
-    explorer?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    navigate(
+      `/testing?projectId=${encodeURIComponent(projectId)}&repositoryId=${encodeURIComponent(repositoryId)}`
+    );
   }
 
   function handleDeleteWorkspace() {

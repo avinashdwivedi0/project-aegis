@@ -8,6 +8,11 @@ export type ContainerRunOptions = {
   command: ToolCommand;
   args: string[];
   workspace: string;
+  writableMounts?: Array<{
+    hostPath: string;
+    containerPath: string;
+  }>;
+  environment?: Record<string, string>;
   image?: string;
   timeoutMs?: number;
   maxOutputBytes?: number;
@@ -16,6 +21,7 @@ export type ContainerRunOptions = {
 
 const CONTAINER_COMMANDS: Record<ToolCommand, string> = {
   node: "node",
+  npx: "npx",
   npm: "npm",
   pnpm: "pnpm",
   python: "python3",
@@ -53,6 +59,16 @@ export function buildContainerArgs(
     "--mount",
     `type=bind,src=${workspace},dst=/workspace,readonly`,
     "--workdir=/workspace",
+    ...(options.writableMounts ?? []).flatMap((mount) => [
+      "--mount",
+      `type=bind,src=${path.resolve(mount.hostPath)},dst=${mount.containerPath}`,
+    ]),
+    ...(options.environment
+      ? Object.entries(options.environment).flatMap(([key, value]) => [
+          "--env",
+          `${key}=${value}`,
+        ])
+      : []),
     image,
     executable,
     ...options.args,

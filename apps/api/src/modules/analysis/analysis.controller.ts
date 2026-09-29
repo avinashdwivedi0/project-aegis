@@ -5,6 +5,7 @@ import { successResponse } from "../../utils/response";
 
 import { AnalysisService } from "./analysis.service";
 import { AnalysisQueue } from "./analysis.queue";
+import { ciIntegrationService } from "../ci/ci-integration.service";
 
 type AnalysisParams = {
   id: string;
@@ -177,6 +178,36 @@ export class AnalysisController {
       const run = await AnalysisService.retry(req.user.userId, req.params.id);
       await AnalysisQueue.enqueue(req.user.userId, run.id);
       return successResponse(res, "Analysis retry queued.", run);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async gate(
+    req: AuthenticatedRequest<AnalysisParams>,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      // Verify the run exists and belongs to the authenticated user
+      await AnalysisService.get(req.user.userId, req.params.id);
+
+      const result = await ciIntegrationService.getMergeGateStatus(
+        req.params.id,
+        {
+          failOnCritical: req.query.failOnCritical !== "false",
+          failOnHigh: req.query.failOnHigh !== "false",
+          allowedFailures: req.query.allowedFailures
+            ? String(req.query.allowedFailures).split(",")
+            : undefined,
+        },
+      );
+
+      return successResponse(
+        res,
+        result,
+        "Merge gate evaluation complete.",
+      );
     } catch (error) {
       next(error);
     }

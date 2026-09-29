@@ -6,6 +6,7 @@ import type {
   AgentProvider,
 } from "../agents/agent.provider";
 import { GroqAgentProvider } from "../agents/gemini.provider";
+import { resolvePromptPath } from "../prompt-path";
 
 import {
   requirementAnalysisInputSchema,
@@ -17,7 +18,7 @@ import {
 const PROMPT_PATH = path.resolve(
   process.cwd(),
   "prompts",
-  "requirement-analyst.v1.md",
+  "requirement-analyst.v1.prompt",
 );
 
 export class RequirementAnalystService {
@@ -33,7 +34,7 @@ export class RequirementAnalystService {
     const validatedInput =
       requirementAnalysisInputSchema.parse(input);
     const promptTemplate = await fs.readFile(
-      this.promptPath,
+      resolvePromptPath(this.promptPath),
       "utf8",
     );
     const prompt = promptTemplate.replace(

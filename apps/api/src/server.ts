@@ -1,5 +1,5 @@
-import app from "./app";
-import { AnalysisQueue } from "./modules/analysis/analysis.queue";
+import app from "./app.js";
+import { AnalysisQueue } from "./modules/analysis/analysis.queue.js";
 
 const PORT = 3000;
 

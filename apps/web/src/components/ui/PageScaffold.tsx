@@ -21,12 +21,12 @@ export function PageScaffold({
   description,
   icon: Icon,
   children,
-  workspacePath = "/projects",
+  workspacePath = "/testing",
 }: PageScaffoldProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-8">
+    <div className="mx-auto max-w-360 space-y-8">
       <header className="relative overflow-hidden rounded-2xl border border-[#dfe4eb] bg-white px-6 py-7 shadow-[0_10px_30px_rgba(23,32,51,0.05)] md:px-8">
         <div className="absolute right-0 top-0 h-full w-1/3 bg-[linear-gradient(120deg,transparent,#e8f1ff)] opacity-80" />
         <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
@@ -71,7 +71,7 @@ export function EmptyState({
   icon: LucideIcon;
   title: string;
   description: string;
-  action: string;
+  action?: string;
   onAction?: () => void;
 }) {
   const navigate = useNavigate();
@@ -85,13 +85,15 @@ export function EmptyState({
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#667085]">
         {description}
       </p>
-      <Button
-        variant="outline"
-        className="mt-6 border-[#bfd6f8] text-[#1264d8] hover:bg-[#f3f7fd]"
-        onClick={onAction ?? (() => navigate("/projects"))}
-      >
-        {action}
-      </Button>
+      {action && (
+        <Button
+          variant="outline"
+          className="mt-6 border-[#bfd6f8] text-[#1264d8] hover:bg-[#f3f7fd]"
+          onClick={onAction ?? (() => navigate("/projects"))}
+        >
+          {action}
+        </Button>
+      )}
     </section>
   );
 }

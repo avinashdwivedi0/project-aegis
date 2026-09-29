@@ -11,6 +11,9 @@ import type {
   UpdateAnalysisProgressInput,
 } from "./analysis.types";
 
+import { RepairBridgeService } from "./repair-bridge.service";
+import { ciIntegrationService } from "../ci/ci-integration.service";
+
 export class AnalysisService {
   private static async findRepository(
     ownerId: string,
@@ -224,6 +227,12 @@ export class AnalysisService {
       progress: 100,
     });
 
+    // Bridge: create RepairJob + Findings for governance actions
+    // Bridge runs asynchronously; bridge status is tracked on AnalysisRun.bridgeStatus
+    void RepairBridgeService.bridgeRunToRepairJob(ownerId, runId).catch((err) => {
+      console.error(`[RepairBridge] failed for run ${runId}:`, err);
+    });
+
     return updatedRun;
   }
 
@@ -376,5 +385,21 @@ export class AnalysisService {
       },
       bySeverity,
     };
+  }
+
+  static async gate(
+    ownerId: string,
+    runId: string,
+    options: {
+      failOnCritical?: boolean;
+      failOnHigh?: boolean;
+      allowedFailures?: string[];
+    } = {},
+  ) {
+    await this.findRun(ownerId, runId);
+    return ciIntegrationService.getMergeGateStatus(
+      runId,
+      options,
+    );
   }
 }

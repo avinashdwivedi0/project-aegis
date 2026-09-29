@@ -6,6 +6,7 @@ export type AnalysisEventInput = {
   stage?: string;
   message?: string;
   progress?: number;
+  agentRole?: string;
 };
 
 export class AnalysisEventService {

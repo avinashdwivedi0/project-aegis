@@ -13,7 +13,7 @@ import ActivityFeed from "@/components/dashboard/ActivityFeed";
 
 function DashboardPage() {
   return (
-    <div className="mx-auto max-w-[1440px] space-y-8">
+    <div className="mx-auto max-w-360 space-y-8">
       {/* Header */}
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#1264d8]">

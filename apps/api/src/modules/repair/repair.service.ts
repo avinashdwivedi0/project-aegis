@@ -14,6 +14,7 @@ import { FindingSeverity } from "@prisma/client";
 
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/ApiError";
+import { AuditLogger } from "../../utils/audit-logger";
 import type {
   Finding,
   Patch,
@@ -299,6 +300,16 @@ export class RepairService {
       data: { status: "PATCHED", patchId: patch.id },
     });
 
+    // Audit: patch generated
+    await AuditLogger.record(
+      ownerId,
+      "PATCH_GENERATE",
+      "Patch",
+      patch.id,
+      { findingId, riskScore, linesAdded: generated.linesAdded, linesRemoved: generated.linesRemoved },
+      true,
+    );
+
     return mapPrismaPatch(patch);
   }
 
@@ -473,6 +484,17 @@ export class RepairService {
       where: { id: patch.findingId },
       data: { status: "REJECTED" },
     });
+
+    // Audit: patch rejected
+    await AuditLogger.record(
+      ownerId,
+      "PATCH_REJECT",
+      "Patch",
+      patchId,
+      { findingId: patch.findingId, previousLifecycle: patch.lifecycle },
+      true,
+    );
+
     return { patchId, status: "REJECTED" as const };
   }
 

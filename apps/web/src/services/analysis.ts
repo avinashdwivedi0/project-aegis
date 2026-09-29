@@ -13,6 +13,12 @@ export type Finding = {
   code?: string;
   diffContent?: string;
   patchId?: string;
+  // Bridge metadata — populated by finding.service.listWithRepairMeta()
+  repairFindingId?: string;
+  sourceFindingKey?: string;
+  bridgePending?: boolean;
+  bridgeStatus?: string;
+  bridgeError?: string;
 };
 
 export type AnalysisScore = {
@@ -58,6 +64,7 @@ export type AnalysisEvent = {
   stage: string | null;
   message: string | null;
   progress: number | null;
+  agentRole: string | null;
   createdAt: string;
 };
 
@@ -116,4 +123,23 @@ export async function downloadAnalysisReport(runId: string) {
   link.download = `analysis-${runId}.md`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+export async function getAuditLogs(
+  runId?: string,
+  limit = 100,
+  offset = 0,
+  actorId?: string,
+  targetType?: string,
+  targetId?: string
+) {
+  let url = "/audits";
+  const params: Record<string, string> = { limit: limit.toString(), offset: offset.toString() };
+  if (runId) params.runId = runId;
+  if (actorId) params.actorId = actorId;
+  if (targetType) params.targetType = targetType;
+  if (targetId) params.targetId = targetId;
+
+  const response = await api.get<{ data: { logs: any[]; total: number } }>(url, { params });
+  return response.data.data;
 }

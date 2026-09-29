@@ -63,5 +63,10 @@ router.post(
   authenticate,
   AnalysisController.retry,
 );
+router.get(
+  "/:id/gate",
+  authenticate,
+  AnalysisController.gate,
+);
 
 export default router;

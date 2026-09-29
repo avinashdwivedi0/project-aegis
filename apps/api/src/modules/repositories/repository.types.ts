@@ -10,6 +10,7 @@ export type CreateRepositoryInput = {
   url?: string;
   defaultBranch?: string;
   isPrivate?: boolean;
+  workspacePath?: string;
 };
 
 export type UpdateRepositoryInput = {
@@ -19,6 +20,7 @@ export type UpdateRepositoryInput = {
   url?: string;
   defaultBranch?: string;
   isPrivate?: boolean;
+  workspacePath?: string;
   status?: RepositoryStatus;
 };
 

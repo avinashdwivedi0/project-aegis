@@ -94,6 +94,7 @@ export class RepositoryService {
           data.defaultBranch,
         isPrivate:
           data.isPrivate ?? false,
+        workspacePath: data.workspacePath ?? null,
         projectId,
       },
     });
@@ -257,6 +258,12 @@ export class RepositoryService {
           undefined && {
           status:
             data.status as RepositoryStatus,
+        }),
+
+        ...(data.workspacePath !==
+          undefined && {
+          workspacePath:
+            data.workspacePath,
         }),
       },
     });

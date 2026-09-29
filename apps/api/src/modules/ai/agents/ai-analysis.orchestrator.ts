@@ -3,6 +3,7 @@ import { aiConfig } from "../../../config/ai.config";
 
 import { AgentExecutorService } from "./agent.executor";
 import { GroqAgentProvider } from "./gemini.provider";
+import { LocalAgentProvider } from "../providers/local.provider";
 import { ProjectAnalyzerService } from "./project-analyzer.service";
 import { CodeQualityAgentService } from "./code-quality.service";
 import { SecurityAgentService } from "./security.service";
@@ -16,12 +17,16 @@ import { ReportAgentService } from "./report.service";
 import type { AgentOutput } from "./agent.types";
 import type { ToolEvidence } from "../../analysis/tool-adapter.types";
 
+import { AnalysisEventService } from "../../analysis/analysis-event.service";
+
 const agentModel =
   process.env.GROQ_CHAT_MODEL ?? aiConfig.chatModel;
 
 export class AiAnalysisOrchestrator {
   private static readonly provider =
-    new GroqAgentProvider();
+    process.env.AGENT_MODE === "local"
+      ? new LocalAgentProvider()
+      : new GroqAgentProvider();
 
   private static readonly executor =
     new AgentExecutorService(
@@ -102,27 +107,72 @@ export class AiAnalysisOrchestrator {
       ),
     };
 
-    const outputs = await Promise.all([
-      services.codeQuality.analyze(commonInput),
-      services.security.analyze(commonInput),
-      services.dependency.analyze(commonInput),
-      services.test.analyze(commonInput),
-      services.api.analyze(commonInput),
-      services.ui.analyze(commonInput),
-      services.performance.analyze(commonInput),
-      services.report.analyze(commonInput),
+    const agentKeys = [
+      "codeQuality", "security", "dependency", "test",
+      "api", "ui", "performance", "report",
+    ];
+
+    // Emit AGENT_STARTED events before running agents
+    for (const agentKey of agentKeys) {
+      await AnalysisEventService.record({
+        analysisRunId,
+        type: "AGENT_STARTED",
+        agentRole: agentKey,
+        message: `${agentKey} agent started`,
+        progress: 0,
+      });
+    }
+
+    // Run agents with Promise.allSettled for failure isolation
+    // Each agent is wrapped so its completion/failure event is recorded
+    // as soon as THAT agent finishes, not after all have finished.
+    const runAgent = async (
+      agentKey: string,
+      fn: () => Promise<AgentOutput>,
+    ): Promise<AgentOutput> => {
+      try {
+        const output = await fn();
+        await AnalysisEventService.record({
+          analysisRunId,
+          type: "AGENT_COMPLETED",
+          agentRole: agentKey,
+          message: `${agentKey} agent completed successfully`,
+          progress: 100,
+        });
+        await AiAnalysisOrchestrator.persistOutput(analysisRunId, output);
+        return output;
+      } catch (reason) {
+        await AnalysisEventService.record({
+          analysisRunId,
+          type: "AGENT_FAILED",
+          agentRole: agentKey,
+          message: `${agentKey} agent failed: ${reason instanceof Error ? reason.message : "unknown error"}`,
+          progress: 0,
+        });
+        throw reason;
+      }
+    };
+
+    const outputs = await Promise.allSettled([
+      runAgent("codeQuality", () => services.codeQuality.analyze(commonInput)),
+      runAgent("security", () => services.security.analyze(commonInput)),
+      runAgent("dependency", () => services.dependency.analyze(commonInput)),
+      runAgent("test", () => services.test.analyze(commonInput)),
+      runAgent("api", () => services.api.analyze(commonInput)),
+      runAgent("ui", () => services.ui.analyze(commonInput)),
+      runAgent("performance", () => services.performance.analyze(commonInput)),
+      runAgent("report", () => services.report.analyze(commonInput)),
     ]);
 
-    await Promise.all(
-      outputs.map((output) =>
-        AiAnalysisOrchestrator.persistOutput(
-          analysisRunId,
-          output,
-        ),
-      ),
-    );
+    // Extract successful outputs
+    const fulfilledOutputs: AgentOutput[] = [];
+    for (const output of outputs) {
+      if (output.status === "fulfilled") {
+        fulfilledOutputs.push(output.value);
+      }
+    }
 
-    return outputs;
+    return fulfilledOutputs;
   }
 
   private static toAgentEvidence(

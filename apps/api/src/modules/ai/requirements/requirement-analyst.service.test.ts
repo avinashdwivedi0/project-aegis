@@ -35,7 +35,7 @@ test("requirement analyst validates structured scenarios", async () => {
   );
   const service = new RequirementAnalystService(
     provider,
-    "prompts/requirement-analyst.v1.md",
+    "prompts/requirement-analyst.v1.prompt",
   );
 
   const output = await service.analyze({
@@ -54,7 +54,7 @@ test("requirement analyst validates structured scenarios", async () => {
 test("requirement analyst rejects malformed provider output", async () => {
   const service = new RequirementAnalystService(
     new FixtureProvider("not-json"),
-    "prompts/requirement-analyst.v1.md",
+    "prompts/requirement-analyst.v1.prompt",
   );
 
   await assert.rejects(

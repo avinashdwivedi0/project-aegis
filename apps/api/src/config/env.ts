@@ -1,7 +1,14 @@
 import dotenv from "dotenv";
 import { z } from "zod";
 
-dotenv.config();
+dotenv.config({ path: [".env.local", ".env"].find((f) => {
+    try {
+      require("fs").accessSync(f);
+      return f;
+    } catch {
+      return null;
+    }
+  }) ?? ".env" });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]),

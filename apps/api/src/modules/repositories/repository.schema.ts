@@ -45,6 +45,10 @@ export const createRepositorySchema = {
     isPrivate: z
       .boolean()
       .optional(),
+
+    workspacePath: z
+      .string()
+      .optional(),
   }),
 
   params: z.object({
@@ -98,6 +102,10 @@ export const updateRepositorySchema = {
         "FAILED",
         "ARCHIVED",
       ])
+      .optional(),
+
+    workspacePath: z
+      .string()
       .optional(),
   }),
 

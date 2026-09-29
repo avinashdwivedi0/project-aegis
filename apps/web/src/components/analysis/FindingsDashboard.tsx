@@ -24,6 +24,50 @@ export default function FindingsDashboard({ runId }: { runId: string }) {
   const [patchLoading, setPatchLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
+  const [bridgeStatus, setBridgeStatus] = useState<"PENDING" | "COMPLETED" | "FAILED" | null>(null);
+  const [bridgeError, setBridgeError] = useState<string | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+
+  // Poll bridge status until it leaves PENDING
+  useEffect(() => {
+    let active = true;
+    let interval: ReturnType<typeof setInterval>;
+
+    void (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      try {
+        // Check bridge status via findings endpoint (includes bridgeStatus in response)
+        const result = await getFindings(runId, {});
+        if (!active) return;
+        const firstFinding = result[0];
+        if (firstFinding?.bridgeStatus && firstFinding.bridgeStatus !== "COMPLETED" && firstFinding.bridgeStatus !== "FAILED") {
+          setBridgeStatus(firstFinding.bridgeStatus as "PENDING" | "COMPLETED" | "FAILED");
+          setIsPolling(true);
+          interval = setInterval(async () => {
+            if (!active) return;
+            try {
+              const updated = await getFindings(runId, {});
+              const f = updated[0];
+              if (f?.bridgeStatus) {
+                setBridgeStatus(f.bridgeStatus as "PENDING" | "COMPLETED" | "FAILED");
+                setBridgeError(f.bridgeError ?? null);
+              }
+              if (f.bridgeStatus === "COMPLETED" || f.bridgeStatus === "FAILED") {
+                setIsPolling(false);
+                if (interval) clearInterval(interval);
+              }
+            } catch { /* ignore poll errors */ }
+          }, 3000);
+        } else if (firstFinding?.bridgeStatus) {
+          setBridgeStatus(firstFinding.bridgeStatus as "PENDING" | "COMPLETED" | "FAILED");
+          setBridgeError(firstFinding.bridgeError ?? null);
+        }
+      } catch { /* ignore */ }
+    })();
+
+    return () => { active = false; if (interval) clearInterval(interval); };
+  }, [runId]);
 
   useEffect(() => {
     let active = true;
@@ -44,6 +88,12 @@ export default function FindingsDashboard({ runId }: { runId: string }) {
         if (!active) return;
         setFindings(nextFindings);
         setScore(nextScore.score);
+        // Extract bridge status from first finding if available
+        const firstFinding = nextFindings[0];
+        if (firstFinding?.bridgeStatus) {
+          setBridgeStatus(firstFinding.bridgeStatus as "PENDING" | "COMPLETED" | "FAILED");
+          setBridgeError(firstFinding.bridgeError ?? null);
+        }
       } catch {
         if (active) setError(true);
       } finally {
@@ -58,10 +108,10 @@ export default function FindingsDashboard({ runId }: { runId: string }) {
   const ScoreIcon = icon;
 
   async function handleGeneratePatch() {
-    if (!selectedFinding || patchLoading) return;
+    if (!selectedFinding?.repairFindingId || patchLoading) return;
     setPatchLoading(true);
     try {
-      const patch = await generatePatch(selectedFinding.id);
+      const patch = await generatePatch(selectedFinding.repairFindingId);
       setSelectedFinding({ ...selectedFinding, diffContent: patch.diffContent });
     } finally {
       setPatchLoading(false);
@@ -121,11 +171,31 @@ export default function FindingsDashboard({ runId }: { runId: string }) {
         <input value={source} onChange={(event) => setSource(event.target.value)} placeholder="Filter by source" className="rounded-lg border border-[#dfe4eb] px-3 py-2 text-sm text-[#344054] placeholder:text-[#98a2b3]" />
       </div>
 
+      {bridgeStatus === "PENDING" && (
+        <div className="py-4 text-sm text-blue-700 bg-blue-50 rounded-lg px-4 flex items-center gap-2">
+          <Loader2 className="animate-spin" size={16} />
+          <span>Repair bridge is being populated... (this may take a few seconds)</span>
+        </div>
+      )}
+      {bridgeStatus === "FAILED" && (
+        <div className="py-4 text-sm text-red-700 bg-red-50 rounded-lg px-4 flex items-center gap-2">
+          <AlertTriangle size={16} />
+          <span>Repair bridge failed: {bridgeError ?? "Unknown error"}</span>
+        </div>
+      )}
+      {bridgeStatus === "COMPLETED" && isPolling && (
+        <div className="py-4 text-sm text-emerald-700 bg-emerald-50 rounded-lg px-4 flex items-center gap-2">
+          <CheckCircle2 size={16} />
+          <span>Repair bridge ready — patch actions available.</span>
+        </div>
+      )}
+
       {loading && <div className="flex items-center gap-2 py-8 text-sm text-[#667085]"><Loader2 className="animate-spin" size={17} /> Loading findings...</div>}
       {error && <p className="py-8 text-sm text-red-600">Unable to load findings for this run.</p>}
       {!loading && !error && findings.length === 0 && <p className="py-8 text-sm text-[#667085]">No findings match the selected filters.</p>}
+      {!loading && !error && findings.length > 0 && !findings.some((f) => f.repairFindingId) && <div className="py-4 text-sm text-amber-700 bg-amber-50 rounded-lg px-4">Repair bridge not yet populated — patch actions are unavailable until the analysis run is bridged to the repair engine.</div>}
       {!loading && !error && findings.length > 0 && <div className="divide-y divide-[#edf0f4]">{findings.map((finding) => <button key={finding.id} type="button" onClick={() => setSelectedFinding(finding)} className="block w-full py-4 text-left first:pt-1 hover:bg-[#f8fafc]"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${severityStyles[finding.severity] ?? severityStyles.info}`}>{finding.severity}</span><span className="text-xs font-medium text-[#667085]">{finding.source}</span></div><p className="mt-2 font-medium text-[#172033]">{finding.message}</p><p className="mt-1 text-xs text-[#667085]">{finding.filePath ?? "Repository-level evidence"}{finding.lineStart ? `:${finding.lineStart}` : ""}{finding.code ? ` · ${finding.code}` : ""}</p></button>)}</div>}
-      {selectedFinding && <div className="border-t border-[#dfe4eb] pt-5" role="dialog" aria-label="Finding details"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1264d8]">Finding details</p><h3 className="mt-2 text-lg font-semibold text-[#172033]">{selectedFinding.message}</h3></div><button type="button" onClick={() => setSelectedFinding(null)} aria-label="Close finding details" className="rounded-lg p-2 text-[#667085] hover:bg-[#edf0f4]"><X size={18} /></button></div><dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-[#667085]">Severity</dt><dd className="mt-1 font-medium capitalize text-[#172033]">{selectedFinding.severity}</dd></div><div><dt className="text-xs text-[#667085]">Status</dt><dd className="mt-1 font-medium capitalize text-[#172033]">{selectedFinding.status}</dd></div><div><dt className="text-xs text-[#667085]">Source</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.source}</dd></div><div><dt className="text-xs text-[#667085]">Rule</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.code ?? "Not supplied"}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-[#667085]">Location</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.filePath ?? "Repository-level evidence"}{selectedFinding.lineStart ? `:${selectedFinding.lineStart}` : ""}</dd></div></dl><div className="mt-5 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void handleGeneratePatch()} disabled={patchLoading || Boolean(selectedFinding.diffContent)} className="rounded-lg bg-[#1264d8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0b4da8] disabled:cursor-not-allowed disabled:opacity-50">{patchLoading ? "Generating patch..." : selectedFinding.diffContent ? "Patch generated" : "Generate patch"}</button>{selectedFinding.patchId && <button type="button" onClick={() => void handleRejectPatch()} disabled={rejectLoading || selectedFinding.status === "rejected"} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">{rejectLoading ? "Rejecting..." : selectedFinding.status === "rejected" ? "Patch rejected" : "Reject patch"}</button>}</div><div className="mt-5"><DiffViewer diff={selectedFinding.diffContent} /></div></div>}
+      {selectedFinding && <div className="border-t border-[#dfe4eb] pt-5" role="dialog" aria-label="Finding details"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1264d8]">Finding details</p><h3 className="mt-2 text-lg font-semibold text-[#172033]">{selectedFinding.message}</h3></div><button type="button" onClick={() => setSelectedFinding(null)} aria-label="Close finding details" className="rounded-lg p-2 text-[#667085] hover:bg-[#edf0f4]"><X size={18} /></button></div><dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-[#667085]">Severity</dt><dd className="mt-1 font-medium capitalize text-[#172033]">{selectedFinding.severity}</dd></div><div><dt className="text-xs text-[#667085]">Status</dt><dd className="mt-1 font-medium capitalize text-[#172033]">{selectedFinding.status}</dd></div><div><dt className="text-xs text-[#667085]">Source</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.source}</dd></div><div><dt className="text-xs text-[#667085]">Rule</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.code ?? "Not supplied"}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-[#667085]">Location</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.filePath ?? "Repository-level evidence"}{selectedFinding.lineStart ? `:${selectedFinding.lineStart}` : ""}</dd></div></dl><div className="mt-5 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void handleGeneratePatch()} disabled={patchLoading || Boolean(selectedFinding.diffContent) || !selectedFinding.repairFindingId} className="rounded-lg bg-[#1264d8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0b4da8] disabled:cursor-not-allowed disabled:opacity-50" title={!selectedFinding.repairFindingId ? "Bridge not ready" : undefined}>{patchLoading ? "Generating patch..." : selectedFinding.diffContent ? "Patch generated" : !selectedFinding.repairFindingId ? "Bridge pending" : "Generate patch"}</button>{selectedFinding.patchId && <button type="button" onClick={() => void handleRejectPatch()} disabled={rejectLoading || selectedFinding.status === "rejected"} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">{rejectLoading ? "Rejecting..." : selectedFinding.status === "rejected" ? "Patch rejected" : "Reject patch"}</button>}</div><div className="mt-5"><DiffViewer diff={selectedFinding.diffContent} /></div></div>}
     </section>
   );
 }

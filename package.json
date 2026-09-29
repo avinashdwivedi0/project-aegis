@@ -10,11 +10,11 @@
     "node": ">=22.22.0"
   },
   "scripts": {
-    "dev": "echo \"Workspace initialized\"",
-    "build": "echo \"Build pipeline will be configured\"",
-    "lint": "echo \"Lint configuration pending\"",
-    "format": "echo \"Formatter configuration pending\"",
-    "test": "echo \"Test configuration pending\""
+    "dev": "pnpm --dir apps/api dev",
+    "build": "pnpm --dir apps/api build && pnpm --dir apps/web build",
+    "lint": "pnpm --dir apps/web lint",
+    "format": "pnpm --dir apps/web exec prettier --check src",
+    "test": "pnpm --dir apps/api exec tsx --test src/modules/ai/agents/agent.executor.test.ts src/modules/ai/retrieval/retrieval.service.test.ts src/modules/ai/requirements/requirement-analyst.service.test.ts src/modules/ai/test-design/test-designer.service.test.ts src/modules/ai/script-generation/script-generator.service.test.ts src/modules/ai/test-runner/test-runner.service.test.ts src/modules/ai/self-healing/self-healing.service.test.ts src/modules/ai/failure-triage/failure-triage.service.test.ts"
   },
   "dependencies": {}
 }

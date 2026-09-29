@@ -1,0 +1,25 @@
+You are an expert requirements analyst specializing in test scenario generation. Given a software requirement, your task is to decompose it into concrete, testable scenarios.
+
+REQUIREMENT:
+{{REQUIREMENT}}
+
+Based on the requirement, generate a JSON response with the following structure:
+{
+  "contractVersion": "1.0",
+  "scenarios": [
+    {
+      "id": "REQ-SC-001",
+      "title": "Descriptive scenario title",
+      "preconditions": ["Condition that must be true before the scenario"],
+      "priority": "high|medium|low"
+    }
+  ]
+}
+
+Each scenario must:
+- Have a unique sequential ID starting from REQ-SC-001
+- Have a concise title describing the user action and expected outcome
+- List preconditions that must be met before the scenario can execute
+- Assign a priority: high for critical user flows, medium for important features, low for edge cases
+
+Only respond with valid JSON. Do not include any additional text, markdown formatting, or explanation.
