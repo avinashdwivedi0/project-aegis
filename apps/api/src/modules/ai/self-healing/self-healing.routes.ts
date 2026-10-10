@@ -24,5 +24,15 @@ router.post(
   authenticate,
   SelfHealingController.review,
 );
+router.post(
+  "/proposals/:proposalId/validate",
+  authenticate,
+  SelfHealingController.validate,
+);
+router.post(
+  "/proposals/:proposalId/retry",
+  authenticate,
+  SelfHealingController.retry,
+);
 
 export default router;

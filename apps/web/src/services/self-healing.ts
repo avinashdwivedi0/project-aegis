@@ -1,5 +1,13 @@
 import api from "./api";
 
+export type SelfHealingLifecycleStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "VALIDATING"
+  | "VALIDATED"
+  | "ROLLED_BACK";
+
 export type SelfHealingProposal = {
   id: string;
   repositoryId: string;
@@ -12,7 +20,9 @@ export type SelfHealingProposal = {
   proposedLocator: string;
   confidence: number;
   reasoning: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: SelfHealingLifecycleStatus;
+  retryCount: number;
+  parentProposalId: string | null;
   createdAt: string;
   reviewedAt: string | null;
 };
@@ -38,7 +48,13 @@ type ApiResponse<T> = {
 
 export async function listProposals(
   repositoryId?: string,
-  status?: "PENDING" | "APPROVED" | "REJECTED",
+  status?:
+    | "PENDING"
+    | "APPROVED"
+    | "REJECTED"
+    | "VALIDATING"
+    | "VALIDATED"
+    | "ROLLED_BACK",
 ) {
   const params = new URLSearchParams();
   if (repositoryId) params.set("repositoryId", repositoryId);
@@ -67,6 +83,25 @@ export async function reviewProposal(
   const response = await api.post<ApiResponse<SelfHealingProposal>>(
     `/self-healing/proposals/${proposalId}/review`,
     input,
+  );
+  return response.data.data;
+}
+
+export async function validateProposal(
+  proposalId: string,
+  passed: boolean,
+  reason?: string,
+) {
+  const response = await api.post<ApiResponse<SelfHealingProposal>>(
+    `/self-healing/proposals/${proposalId}/validate`,
+    { passed, reason },
+  );
+  return response.data.data;
+}
+
+export async function retryProposal(proposalId: string) {
+  const response = await api.post<ApiResponse<SelfHealingProposal>>(
+    `/self-healing/proposals/${proposalId}/retry`,
   );
   return response.data.data;
 }

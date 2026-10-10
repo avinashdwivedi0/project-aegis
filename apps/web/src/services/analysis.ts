@@ -36,6 +36,27 @@ export type AnalysisRun = {
   error: string | null;
 };
 
+export type AnalysisRunSummaryDetail = {
+  runId: string;
+  tools: Record<string, { status: string; evidence: number; reason: string | null }>;
+  totals: { executions: number; evidence: number };
+  bySeverity: Record<string, number>;
+};
+
+export type MergeGateResult = {
+  allowed: boolean;
+  reason: string;
+  findings: number;
+};
+
+export type RepairPatch = {
+  patchId: string;
+  findingId: string;
+  diffContent: string;
+  lifecycle: string;
+  riskScore: number;
+};
+
 export type AnalysisRunSummary = AnalysisRun & {
   ref: string;
   createdAt: string;
@@ -101,15 +122,55 @@ export async function retryAnalysis(runId: string) {
   return response.data.data;
 }
 
+export async function cancelAnalysis(runId: string) {
+  const response = await api.post<{ data: AnalysisRun }>(`/analyses/${runId}/cancel`);
+  return response.data.data;
+}
+
+export async function getAnalysisSummary(runId: string) {
+  const response = await api.get<{ data: AnalysisRunSummaryDetail }>(`/analyses/${runId}/summary`);
+  return response.data.data;
+}
+
+export async function getMergeGate(runId: string) {
+  const response = await api.get<{ data: MergeGateResult }>(`/analyses/${runId}/gate`);
+  return response.data.data;
+}
+
 export async function generatePatch(findingId: string) {
-  const response = await api.post<{ data: { diffContent: string } }>(
+  const response = await api.post<{ data: RepairPatch }>(
     `/repairs/findings/${findingId}/patch`,
   );
   return response.data.data;
 }
 
+export async function approvePatch(patchId: string) {
+  const response = await api.post<{ data: { patchId: string; status: string } }>(`/repairs/patches/${patchId}/approve`);
+  return response.data.data;
+}
+
 export async function rejectPatch(patchId: string) {
   const response = await api.post<{ data: { patchId: string; status: string } }>(`/repairs/patches/${patchId}/reject`);
+  return response.data.data;
+}
+
+export async function getPatch(patchId: string) {
+  const response = await api.get<{ data: RepairPatch }>(`/repairs/patches/${patchId}`);
+  return response.data.data;
+}
+
+export async function validatePatch(patchId: string) {
+  const response = await api.post<{ data: { validation?: { status: string; testsRun: number; testsPassed: number; testsFailed: number; failures: unknown[] }; patchLifecycle: string } }>(`/repairs/patches/${patchId}/validate`);
+  return response.data.data;
+}
+
+export async function applyPatch(patchId: string) {
+  const response = await api.post<{ data: { success: boolean; output: string; error?: string } }>(`/repairs/patches/${patchId}/apply`, { targetRepo: false });
+  return response.data.data;
+}
+
+export async function createPatchPullRequest(patchId: string, token: string, title: string, body: string) {
+  const response = await api.post<{ data: { url?: string; html_url?: string } }>(`/repairs/patches/${patchId}/pull-request`, { title, body }, { headers: { "x-github-token": token } });
   return response.data.data;
 }
 
@@ -125,21 +186,43 @@ export async function downloadAnalysisReport(runId: string) {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadAnalysisReportJson(runId: string) {
+  const response = await api.get(`/analyses/${runId}/report`);
+  const blob = new Blob([JSON.stringify(response.data.data ?? response.data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `analysis-${runId}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export type AuditLogRecord = {
+  id: string;
+  actorId: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata: Record<string, unknown>;
+  success: boolean;
+  createdAt: string;
+};
+
 export async function getAuditLogs(
-  runId?: string,
   limit = 100,
   offset = 0,
   actorId?: string,
   targetType?: string,
-  targetId?: string
+  targetId?: string,
+  success?: boolean,
 ) {
-  let url = "/audits";
+  const url = "/audits";
   const params: Record<string, string> = { limit: limit.toString(), offset: offset.toString() };
-  if (runId) params.runId = runId;
   if (actorId) params.actorId = actorId;
   if (targetType) params.targetType = targetType;
   if (targetId) params.targetId = targetId;
+  if (success !== undefined) params.success = String(success);
 
-  const response = await api.get<{ data: { logs: any[]; total: number } }>(url, { params });
+  const response = await api.get<{ data: { logs: AuditLogRecord[]; total: number } }>(url, { params });
   return response.data.data;
 }

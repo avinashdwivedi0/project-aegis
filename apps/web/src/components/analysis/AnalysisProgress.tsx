@@ -1,12 +1,17 @@
-import { CheckCircle2, CircleAlert, Loader2 } from "lucide-react";
+import { CheckCircle2, CircleAlert, Loader2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
   getAnalysisEvents,
   getAnalysisRun,
+  getAnalysisSummary,
+  getMergeGate,
+  cancelAnalysis,
   retryAnalysis,
   type AnalysisEvent,
   type AnalysisRun,
+  type AnalysisRunSummaryDetail,
+  type MergeGateResult,
 } from "@/services/analysis";
 
 const terminalStates = new Set(["COMPLETED", "FAILED", "CANCELLED"]);
@@ -24,7 +29,7 @@ const AGENT_ORDER = [
 
 type AgentKey = typeof AGENT_ORDER[number];
 
-type AgentStatus = "pending" | "active" | "completed" | "failed";
+type AgentStatus = "pending" | "active" | "completed" | "findings" | "skipped" | "failed" | "unknown";
 
 function deriveAgentStatuses(events: AnalysisEvent[]): Record<AgentKey, AgentStatus> {
   const statuses: Record<AgentKey, AgentStatus> = {
@@ -46,6 +51,8 @@ function deriveAgentStatuses(events: AnalysisEvent[]): Record<AgentKey, AgentSta
       statuses[role] = "active";
     } else if (event.type === "AGENT_COMPLETED") {
       statuses[role] = "completed";
+    } else if (event.type === "AGENT_SKIPPED") {
+      statuses[role] = "skipped";
     } else if (event.type === "AGENT_FAILED") {
       statuses[role] = "failed";
     }
@@ -78,6 +85,12 @@ function getStatusIcon(status: AgentStatus) {
       return <CheckCircle2 size={14} className="text-emerald-600" />;
     case "failed":
       return <CircleAlert size={14} className="text-red-600" />;
+    case "skipped":
+      return <CircleAlert size={14} className="text-amber-600" />;
+    case "findings":
+      return <CircleAlert size={14} className="text-amber-600" />;
+    case "unknown":
+      return <CircleAlert size={14} className="text-slate-400" />;
   }
 }
 
@@ -87,6 +100,10 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
   const [error, setError] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [summary, setSummary] = useState<AnalysisRunSummaryDetail | null>(null);
+  const [gate, setGate] = useState<MergeGateResult | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [cancelling, setCancelling] = useState(false);
   const pollingEnabled = localStorage.getItem("analysisPolling") !== "off";
 
   useEffect(() => {
@@ -102,6 +119,13 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
         if (!active) return;
         setRun(nextRun);
         setEvents(nextEvents);
+        const [summaryResult, gateResult] = await Promise.allSettled([
+          getAnalysisSummary(runId),
+          getMergeGate(runId),
+        ]);
+        if (!active) return;
+        if (summaryResult.status === "fulfilled") setSummary(summaryResult.value);
+        if (gateResult.status === "fulfilled") setGate(gateResult.value);
         if (pollingEnabled && !terminalStates.has(nextRun.status)) {
           timer = window.setTimeout(load, 2000);
         }
@@ -121,6 +145,31 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
   if (!run) return <section className="flex items-center gap-2 rounded-xl border border-[#dfe4eb] bg-white p-5 text-sm text-[#667085]"><Loader2 size={17} className="animate-spin" /> Loading analysis progress...</section>;
 
   const agentStatuses = deriveAgentStatuses(events);
+  const agentToolNames: Record<AgentKey, string> = {
+    codeQuality: "agent:code-quality",
+    security: "agent:security",
+    dependency: "agent:dependency",
+    test: "agent:test",
+    api: "agent:api",
+    ui: "agent:ui-accessibility",
+    performance: "agent:performance",
+    report: "agent:report",
+  };
+  for (const key of AGENT_ORDER) {
+    const result = summary?.tools[agentToolNames[key]];
+    if (result) {
+      const status = result.status.toUpperCase();
+      agentStatuses[key] = status === "SKIPPED"
+        ? "skipped"
+        : status === "FAILED"
+          ? "failed"
+          : status === "FINDINGS"
+            ? "findings"
+            : status === "PASSED"
+              ? "completed"
+              : agentStatuses[key];
+    }
+  }
   const isComplete = run.status === "COMPLETED";
   const isFailed = run.status === "FAILED" || run.status === "CANCELLED";
 
@@ -129,11 +178,26 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
     setRetrying(true);
     try {
       await retryAnalysis(runId);
+      setActionError("");
       setRun(null);
       setRefreshKey((current) => current + 1);
+    } catch {
+      setActionError("Could not retry this analysis run.");
     } finally {
       setRetrying(false);
     }
+  }
+
+  async function handleCancel() {
+    if (cancelling) return;
+    setCancelling(true);
+    setActionError("");
+    try {
+      setRun(await cancelAnalysis(runId));
+      setRefreshKey((current) => current + 1);
+    } catch {
+      setActionError("Could not cancel this run. It may already have finished.");
+    } finally { setCancelling(false); }
   }
 
   return (
@@ -153,6 +217,13 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
       <div className="mt-2 flex justify-between text-xs text-[#667085]"><span>{run.status}</span><span>{run.progress}%</span></div>
       {!pollingEnabled && !terminalStates.has(run.status) && <p className="mt-4 text-xs text-[#667085]">Live polling is paused in Settings.</p>}
       {run.error && <p className="mt-4 text-sm text-red-600">{run.error}</p>}
+      {actionError && <p role="alert" className="mt-3 text-sm text-red-700">{actionError}</p>}
+
+      <div className={`mt-4 rounded-lg border p-3 text-sm ${gate?.allowed ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+        <p className="font-semibold">Merge gate {gate ? (gate.allowed ? "passed" : "blocked") : "unavailable"}</p>
+        <p className="mt-1">{gate?.reason ?? "Merge gate status could not be loaded."} · {gate?.findings ?? 0} high or critical finding(s)</p>
+      </div>
+      {summary && <details className="mt-4 rounded-lg border border-[#edf0f4] p-4"><summary className="cursor-pointer text-sm font-semibold text-[#344054]">Execution summary ({summary.totals.executions} checks, {summary.totals.evidence} evidence)</summary><div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">{Object.entries(summary.tools).map(([tool, result]) => <div key={tool} className="text-[#475467]"><p>{tool}: {result.status} · {result.evidence} evidence</p>{result.reason && <p className="mt-1 text-xs text-[#667085]">{result.reason}</p>}</div>)}</div><p className="mt-3 text-xs text-[#667085]">Severity counts: {Object.entries(summary.bySeverity).map(([level, count]) => `${level} ${count}`).join(" · ") || "none"}</p></details>}
 
       {/* Agent Status Grid */}
       <div className="mt-5 pt-5 border-t border-[#edf0f4]">
@@ -171,6 +242,10 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
                     ? "border-emerald-200 bg-emerald-50"
                     : status === "failed"
                     ? "border-red-200 bg-red-50"
+                    : status === "skipped"
+                    ? "border-amber-200 bg-amber-50"
+                    : status === "findings"
+                    ? "border-amber-200 bg-amber-50"
                     : "border-[#dfe4eb] bg-white"
                 }`}
               >
@@ -179,12 +254,17 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
                 <p className={`mt-1 text-xs font-medium ${
                   status === "pending" ? "text-[#98a2b3]" :
                   status === "active" ? "text-[#1264d8]" :
-                  status === "completed" ? "text-emerald-700" : "text-red-700"
+                  status === "completed" ? "text-emerald-700" :
+                  status === "skipped" || status === "findings" ? "text-amber-700" :
+                  status === "unknown" ? "text-slate-500" : "text-red-700"
                 }`}>
                   {status === "pending" && "Waiting"}
                   {status === "active" && "Running"}
                   {status === "completed" && "Done"}
+                  {status === "findings" && "Findings"}
+                  {status === "skipped" && "Skipped"}
                   {status === "failed" && "Failed"}
+                  {status === "unknown" && "Status unavailable"}
                 </p>
               </div>
             );
@@ -221,6 +301,7 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
           {retrying ? "Retrying..." : "Retry analysis"}
         </button>
       )}
+      {!terminalStates.has(run.status) && <button type="button" onClick={() => void handleCancel()} disabled={cancelling} className="mt-3 ml-2 inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"><XCircle size={15} />{cancelling ? "Cancelling…" : "Cancel run"}</button>}
     </section>
   );
 }

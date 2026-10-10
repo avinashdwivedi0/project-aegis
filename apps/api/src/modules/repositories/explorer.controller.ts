@@ -29,6 +29,8 @@ export class ExplorerController {
   ) {
     try {
       const repositoryId = req.params.id as string;
+      const ownerId = (req as Request & { user: { userId: string } }).user.userId;
+      await RepositoryService.findForOwner(repositoryId, ownerId);
 
       const files =
         await ExplorerService.getFileTree(
@@ -51,6 +53,8 @@ export class ExplorerController {
   ) {
     try {
       const repositoryId = req.params.id as string;
+      const ownerId = (req as Request & { user: { userId: string } }).user.userId;
+      await RepositoryService.findForOwner(repositoryId, ownerId);
       const filePath = req.query.path as string;
 
       if (!filePath) {

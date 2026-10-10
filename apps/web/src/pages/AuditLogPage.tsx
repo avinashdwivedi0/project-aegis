@@ -1,18 +1,7 @@
 import { Filter, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { getAuditLogs } from "@/services/analysis";
-
-type AuditLog = {
-  id: string;
-  actorId: string;
-  action: string;
-  targetType: string;
-  targetId: string;
-  metadata: Record<string, any>;
-  success: boolean;
-  createdAt: string;
-};
+import { getAuditLogs, type AuditLogRecord } from "@/services/analysis";
 
 type AuditLogFilters = {
   actorId: string;
@@ -24,19 +13,27 @@ type AuditLogFilters = {
 const actionStyles: Record<string, string> = {
   BRIDGE_CREATE: "bg-blue-100 text-blue-700",
   PATCH_GENERATE: "bg-emerald-100 text-emerald-700",
+  PATCH_APPROVE: "bg-cyan-100 text-cyan-700",
   PATCH_REJECT: "bg-red-100 text-red-700",
   PATCH_VALIDATE: "bg-amber-100 text-amber-700",
   PATCH_APPLY: "bg-purple-100 text-purple-700",
+  SELF_HEAL_APPROVED: "bg-sky-100 text-sky-700",
+  SELF_HEAL_REJECTED: "bg-red-100 text-red-700",
+  SELF_HEAL_VALIDATED: "bg-emerald-100 text-emerald-700",
+  SELF_HEAL_ROLLED_BACK: "bg-orange-100 text-orange-700",
+  TEST_WORKFLOW_APPROVED_RUN: "bg-violet-100 text-violet-700",
 };
 
 const targetTypeStyles: Record<string, string> = {
   AnalysisRun: "bg-slate-100 text-slate-700",
   Finding: "bg-indigo-100 text-indigo-700",
   Patch: "bg-violet-100 text-violet-700",
+  SelfHealingProposal: "bg-fuchsia-100 text-fuchsia-700",
+  TestWorkflow: "bg-pink-100 text-pink-700",
 };
 
 export default function AuditLogPage() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [logs, setLogs] = useState<AuditLogRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -60,12 +57,12 @@ export default function AuditLogPage() {
       setError(false);
       try {
         const result = await getAuditLogs(
-          undefined,
           limit,
           (page - 1) * limit,
           filters.actorId || undefined,
           filters.targetType || undefined,
           filters.targetId || undefined,
+          filters.success === "" ? undefined : filters.success === "true",
         );
         if (!active) return;
         setLogs(result.logs);
@@ -103,7 +100,7 @@ export default function AuditLogPage() {
     });
   };
 
-  const formatMetadata = (metadata: Record<string, any>) => {
+  const formatMetadata = (metadata: Record<string, unknown>) => {
     return Object.entries(metadata)
       .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
       .join("; ");

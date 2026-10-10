@@ -25,7 +25,7 @@ export class CodeQualityAgentService {
     promptVersion?: string;
   }): Promise<AgentOutput> {
     const qualityEvidence = input.evidence.filter((item) =>
-      item.tool === "eslint" || item.tool === "typescript"
+      item.tool === "eslint" || item.tool === "typescript" || item.tool === "python-syntax"
     );
 
     if (qualityEvidence.length === 0) {

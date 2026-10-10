@@ -77,9 +77,12 @@ function AuthForm({
           </label>
 
           <input
+            type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            minLength={2}
+            maxLength={100}
             className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
             placeholder="John Doe"
           />
@@ -105,6 +108,7 @@ function AuthForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          autoComplete="email"
           className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
           placeholder="john@example.com"
         />
@@ -129,6 +133,8 @@ function AuthForm({
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          minLength={6}
+          autoComplete={type === "login" ? "current-password" : "new-password"}
           className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none transition focus:border-cyan-400"
           placeholder="••••••••"
         />

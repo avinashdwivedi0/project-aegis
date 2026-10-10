@@ -52,11 +52,17 @@ function CreateRepositoryModal({
         );
       }
 
-      toast.success(
-        data.provider === "GITHUB"
-          ? "GitHub repository connected."
-          : "Repository created successfully."
-      );
+      if (response.data.status === "FAILED") {
+        toast.error(
+          "Repository saved without a workspace. Import or relink it before running analysis."
+        );
+      } else {
+        toast.success(
+          data.provider === "GITHUB"
+            ? "GitHub repository connected."
+            : "Repository created successfully."
+        );
+      }
 
       onCreated();
       onClose();

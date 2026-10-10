@@ -9,6 +9,7 @@ const analysisToolSchema = z.object({
 
 export const analysisAdapterSchema = z.enum([
   "typescript",
+  "python-syntax",
   "eslint",
   "dependency-audit",
   "security-scan",
@@ -24,7 +25,7 @@ export const createAnalysisSchema = z.object({
   ref: z.string().min(1).default("HEAD"),
   totalStages: z.number().int().min(0).max(100).default(0),
   tools: z.array(analysisToolSchema).max(100).default([]),
-  adapters: z.array(analysisAdapterSchema).max(8).default([]),
+  adapters: z.array(analysisAdapterSchema).max(9).default([]),
 });
 
 export const updateAnalysisProgressSchema = z.object({

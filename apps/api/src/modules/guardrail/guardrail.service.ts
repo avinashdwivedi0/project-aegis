@@ -20,7 +20,19 @@ const DEFAULTS: Omit<GuardrailSettings, "id" | "projectId" | "createdAt" | "upda
 };
 
 export class GuardrailService {
-  static async get(projectId: string): Promise<GuardrailSettings> {
+  private static async ensureProjectOwner(projectId: string, ownerId: string) {
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, ownerId },
+      select: { id: true },
+    });
+
+    if (!project) {
+      throw new ApiError(404, "Project not found or access denied.");
+    }
+  }
+
+  static async get(projectId: string, ownerId: string): Promise<GuardrailSettings> {
+    await this.ensureProjectOwner(projectId, ownerId);
     const settings = await prisma.guardrailSettings.findUnique({
       where: { projectId },
     });
@@ -34,6 +46,7 @@ export class GuardrailService {
 
   static async upsert(
     projectId: string,
+    ownerId: string,
     data: {
       maxPatchRiskScore?: number;
       requireManualApprovalForCritical?: boolean;
@@ -41,6 +54,7 @@ export class GuardrailService {
       scope?: "ADVISORY" | "ENFORCED";
     }
   ): Promise<GuardrailSettings> {
+    await this.ensureProjectOwner(projectId, ownerId);
     const settings = await prisma.guardrailSettings.upsert({
       where: { projectId },
       update: {

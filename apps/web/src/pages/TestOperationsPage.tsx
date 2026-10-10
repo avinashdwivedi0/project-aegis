@@ -12,36 +12,49 @@ import { EmptyState, PageScaffold } from "@/components/ui/PageScaffold";
 import { getProjects } from "@/services/project";
 import { getRepositories } from "@/services/repository";
 import { getTestReport, type TestReport } from "@/services/test-report";
+import FailureTriagePanel from "@/components/testing/FailureTriagePanel";
+import PlaywrightRunnerPanel from "@/components/testing/PlaywrightRunnerPanel";
+import type { Project } from "@/types/project";
+import type { Repository } from "@/types/repository";
 
 function TestOperationsPage() {
   const [report, setReport] = useState<TestReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState("");
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [repositoryId, setRepositoryId] = useState("");
 
   useEffect(() => {
     let active = true;
-    void getProjects()
-      .then(async (projects) => {
-        const projectId = projects.data[0]?.id;
-        if (!projectId) return null;
-        const repositories = await getRepositories(projectId);
-        const repositoryId = repositories.data[0]?.id;
-        return repositoryId ? getTestReport(repositoryId) : null;
-      })
-      .then((nextReport) => {
-        if (active && nextReport) setReport(nextReport);
-      })
-      .catch(() => {
-        if (active) setError(true);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    void getProjects().then((response) => {
+      if (active) setProjects(response.data);
+    }).catch(() => { if (active) setError(true); }).finally(() => { if (active) setLoading(false); });
 
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let active = true;
+    void getRepositories(projectId).then((response) => {
+      if (!active) return;
+      setRepositories(response.data);
+      setRepositoryId((current) => response.data.some((item) => item.id === current) ? current : "");
+    }).catch(() => { if (active) setError(true); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!repositoryId) return;
+    let active = true;
+    void getTestReport(repositoryId).then((nextReport) => { if (active) setReport(nextReport); })
+      .catch(() => { if (active) setError(true); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [repositoryId]);
 
   const latest = report?.runHistory.at(-1);
 
@@ -52,6 +65,12 @@ function TestOperationsPage() {
       description="Track Playwright reliability, execution speed, and release readiness from recorded test runs."
       icon={Activity}
     >
+      <FailureTriagePanel />
+      <section className="grid gap-4 rounded-xl border border-[#dfe4eb] bg-white p-5 sm:grid-cols-2">
+        <label className="text-sm font-medium text-[#344054]">Project<select value={projectId} onChange={(event) => { setProjectId(event.target.value); setRepositories([]); setRepositoryId(""); setReport(null); setLoading(true); setError(false); }} className="mt-2 w-full rounded-lg border border-[#dfe4eb] bg-white px-3 py-2"><option value="">Select a project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+        <label className="text-sm font-medium text-[#344054]">Repository<select value={repositoryId} onChange={(event) => { setRepositoryId(event.target.value); setReport(null); setLoading(Boolean(event.target.value)); setError(false); }} disabled={!projectId} className="mt-2 w-full rounded-lg border border-[#dfe4eb] bg-white px-3 py-2"><option value="">Select a repository</option>{repositories.map((repository) => <option key={repository.id} value={repository.id}>{repository.name}</option>)}</select></label>
+      </section>
+      {repositoryId && <PlaywrightRunnerPanel repositoryId={repositoryId} />}
       {loading && (
         <div className="flex items-center gap-2 rounded-xl border border-[#dfe4eb] bg-white p-8 text-sm text-[#667085]">
           <Loader2 className="animate-spin" size={18} /> Loading test intelligence...

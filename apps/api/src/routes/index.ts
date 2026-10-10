@@ -15,6 +15,7 @@ import reportRoutes from "../modules/report/report.routes";
 import auditRoutes from "../modules/audit/audit.routes";
 import { guardrailRoutes } from "../modules/guardrail/index";
 import ciIntegrationRoutes from "../modules/ci/ci-integration.routes";
+import autonomousTestingRoutes from "../modules/autonomous-testing/autonomous-testing.routes.js";
 
 const router = Router();
 
@@ -84,5 +85,6 @@ router.use("/repairs", repairRoutes);
 router.use("/audits", auditRoutes);
 router.use("/projects", guardrailRoutes);
 router.use("/ci", ciIntegrationRoutes);
+router.use("/autonomous-testing", autonomousTestingRoutes);
 
 export default router;

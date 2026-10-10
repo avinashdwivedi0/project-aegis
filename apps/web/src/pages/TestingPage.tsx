@@ -1,4 +1,5 @@
 import { Accessibility, Bug, FlaskConical, Gauge, KeyRound, Loader2, LockKeyhole, Network, PackageCheck, Play, TestTube2, Type } from "lucide-react";
+import axios from "axios";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
@@ -12,11 +13,13 @@ import type { Repository } from "@/types/repository";
 function TestingPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isAcceptanceMode = searchParams.get("mode") === "acceptance";
   const [projectId, setProjectId] = useState(searchParams.get("projectId") ?? localStorage.getItem("selectedProjectId") ?? "");
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [repositoryId, setRepositoryId] = useState(searchParams.get("repositoryId") ?? localStorage.getItem("selectedRepositoryId") ?? "");
   const testTypes = [
     ["typescript", "TypeScript", Type],
+    ["python-syntax", "Python syntax", Type],
     ["eslint", "ESLint", Bug],
     ["dependency-audit", "Dependency audit", PackageCheck],
     ["security-scan", "Security scan", KeyRound],
@@ -31,6 +34,7 @@ function TestingPage() {
   const [error, setError] = useState("");
   const [requirement, setRequirement] = useState("");
   const [workflowRunning, setWorkflowRunning] = useState(false);
+  const [workflowApproved, setWorkflowApproved] = useState(false);
   const [workflowResult, setWorkflowResult] = useState<GeneratedTestWorkflowResult | null>(null);
 
   useEffect(() => {
@@ -67,8 +71,12 @@ function TestingPage() {
         ref: localStorage.getItem("defaultAnalysisRef") ?? "HEAD",
       });
       navigate(`/analysis?runId=${run.id}`);
-    } catch {
-      setError("Unable to start the validation run.");
+    } catch (err: unknown) {
+      const message = axios.isAxiosError<{ message?: unknown }>(err)
+        && typeof err.response?.data?.message === "string"
+        ? err.response.data.message
+        : "Unable to start the validation run.";
+      setError(message);
     } finally {
       setRunning(false);
     }
@@ -92,11 +100,16 @@ function TestingPage() {
     setError("");
     setWorkflowResult(null);
     try {
+      if (!workflowApproved) {
+        throw new Error("Workflow execution requires explicit human approval before running.");
+      }
+
       const result = await runGeneratedTestWorkflow({
         projectId,
         repositoryId,
         requirement,
         parallelism: 2,
+        approved: true,
       });
       setWorkflowResult(result);
     } catch (err: unknown) {
@@ -114,7 +127,7 @@ function TestingPage() {
   ] as const;
 
   return (
-    <PageScaffold eyebrow="Validation lab" title="Testing" description="Coordinate functional, security, and performance checks from one focused workspace." icon={FlaskConical}>
+    <PageScaffold eyebrow={isAcceptanceMode ? "Acceptance (UAT)" : "Validation lab"} title={isAcceptanceMode ? "Acceptance testing" : "Testing"} description={isAcceptanceMode ? "Enter a human-written acceptance requirement and run it through the existing Playwright workflow." : "Coordinate functional, security, and performance checks from one focused workspace."} icon={FlaskConical}>
       <div className="grid gap-5 md:grid-cols-3">
         {cards.map(([Icon, label, detail]) => (
           <div key={label} className="rounded-xl border border-[#dfe4eb] bg-white p-5 shadow-[0_8px_24px_rgba(23,32,51,0.04)]">
@@ -124,7 +137,15 @@ function TestingPage() {
           </div>
         ))}
       </div>
-      {projectId && <section className="rounded-xl border border-[#bfd6f8] bg-[#f8fbff] p-5 shadow-[0_8px_24px_rgba(23,32,51,0.04)]"><div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold text-[#172033]">Requirement to Playwright test</h2><p className="mt-1 text-sm leading-6 text-[#667085]">Generate scenarios, design test cases, create a Playwright script, and execute it in the sandbox.</p></div><TestTube2 className="shrink-0 text-[#1264d8]" size={22} /></div><textarea value={requirement} onChange={(event) => setRequirement(event.target.value)} disabled={workflowRunning || !repositoryId} placeholder="Example: A user can reset their password using a verified email address." className="mt-4 min-h-28 w-full rounded-lg border border-[#dfe4eb] bg-white px-3 py-3 text-sm text-[#344054] outline-none focus:border-[#1264d8]" /><button type="button" onClick={() => void handleGeneratedWorkflow()} disabled={!projectId || !repositoryId || !requirement.trim() || workflowRunning} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#1264d8] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b4da8] disabled:cursor-not-allowed disabled:opacity-50">{workflowRunning ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}{workflowRunning ? "Generating and running..." : "Generate and run Playwright"}</button>{workflowResult && <div className="mt-5 space-y-4"><div className={`rounded-lg border p-4 text-sm ${workflowResult.run.status === "passed" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}><p className="font-semibold">Workflow {workflowResult.run.status}</p><p className="mt-1">{workflowResult.run.passed} passed · {workflowResult.run.failed} failed · {workflowResult.run.skipped} skipped · {workflowResult.scripts.files.length} script(s) generated</p></div><div className="grid gap-4 lg:grid-cols-3"><ReviewPanel title="Scenarios" items={workflowResult.scenarios.scenarios.map((item) => `${item.id} · ${item.title} · ${item.priority}`)} /><ReviewPanel title="Test cases" items={workflowResult.testCases.testCases.map((item) => `${item.id} · ${item.title} · ${item.steps.length} step(s)`)} /><ReviewPanel title="Playwright scripts" items={workflowResult.scripts.files.map((item) => `${item.testCaseId} · ${item.path}`)} /></div></div>}</section>}
+      {projectId && <section className="rounded-xl border border-[#bfd6f8] bg-[#f8fbff] p-5 shadow-[0_8px_24px_rgba(23,32,51,0.04)]"><div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold text-[#172033]">Requirement to Playwright test</h2><p className="mt-1 text-sm leading-6 text-[#667085]">Generate scenarios, design test cases, create a Playwright script, and execute it in the sandbox.</p></div><TestTube2 className="shrink-0 text-[#1264d8]" size={22} /></div><textarea value={requirement} onChange={(event) => {
+          setRequirement(event.target.value);
+          setWorkflowApproved(false);
+        }} disabled={workflowRunning || !repositoryId} placeholder="Example: A user can reset their password using a verified email address." className="mt-4 min-h-28 w-full rounded-lg border border-[#dfe4eb] bg-white px-3 py-3 text-sm text-[#344054] outline-none focus:border-[#1264d8]" />
+        <label className="mt-4 flex items-center gap-3 text-sm text-[#344054]">
+          <input type="checkbox" checked={workflowApproved} onChange={(event) => setWorkflowApproved(event.target.checked)} />
+          I approve this generated workflow for execution.
+        </label>
+        <button type="button" onClick={() => void handleGeneratedWorkflow()} disabled={!projectId || !repositoryId || !requirement.trim() || workflowRunning || !workflowApproved} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#1264d8] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b4da8] disabled:cursor-not-allowed disabled:opacity-50">{workflowRunning ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}{workflowRunning ? "Generating and running..." : "Generate and run Playwright"}</button>{workflowResult && <div className="mt-5 space-y-4"><div className={`rounded-lg border p-4 text-sm ${workflowResult.run.status === "passed" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}><p className="font-semibold">Workflow {workflowResult.run.status}</p><p className="mt-1">{workflowResult.run.passed} passed · {workflowResult.run.failed} failed · {workflowResult.run.skipped} skipped · {workflowResult.scripts.files.length} script(s) generated</p></div><div className="grid gap-4 lg:grid-cols-3"><ReviewPanel title="Scenarios" items={workflowResult.scenarios.scenarios.map((item) => `${item.id} · ${item.title} · ${item.priority}`)} /><ReviewPanel title="Test cases" items={workflowResult.testCases.testCases.map((item) => `${item.id} · ${item.title} · ${item.steps.length} step(s)`)} /><ReviewPanel title="Playwright scripts" items={workflowResult.scripts.files.map((item) => `${item.testCaseId} · ${item.path}`)} /></div></div>}</section>}
       {!projectId && <EmptyState icon={FlaskConical} title="Choose a project first" description="Open Testing from a project workspace to configure a validation run." action="Open projects" onAction={() => window.location.assign("/projects")} />}
       {projectId && <section className="rounded-xl border border-[#dfe4eb] bg-white p-5 shadow-[0_8px_24px_rgba(23,32,51,0.04)]"><label className="block text-sm font-semibold text-[#172033]" htmlFor="testing-repository">Repository</label><select id="testing-repository" value={repositoryId} onChange={(event) => setRepositoryId(event.target.value)} disabled={loading || running} className="mt-2 w-full rounded-lg border border-[#dfe4eb] bg-white px-3 py-2 text-sm text-[#344054]"><option value="">{loading ? "Loading repositories..." : "Select a repository"}</option>{repositories.map((repository) => <option key={repository.id} value={repository.id}>{repository.name}</option>)}</select><div className="mt-4 grid gap-2 sm:grid-cols-2">{testTypes.map(([name, label, Icon]) => <label key={name} className="flex items-center gap-2 rounded-lg border border-[#dfe4eb] px-3 py-2 text-sm text-[#344054]"><input type="checkbox" checked={selectedTools.includes(name)} onChange={() => setSelectedTools((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name])} /><Icon size={16} className="text-[#1264d8]" />{label}</label>)}</div>{error && <p className="mt-3 text-sm text-red-600">{error}</p>}<button type="button" onClick={() => void handleRun()} disabled={!repositoryId || running || selectedTools.length === 0} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#1264d8] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b4da8] disabled:cursor-not-allowed disabled:opacity-50">{running ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />} {running ? "Starting run..." : "Run selected checks"}</button></section>}
     </PageScaffold>

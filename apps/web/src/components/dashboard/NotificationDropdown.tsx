@@ -7,13 +7,14 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { notifications as mockNotifications } from "./notification.data";
 import type { Notification } from "./notification.types";
+import { getAnalysisRuns } from "@/services/analysis";
 
 function NotificationDropdown() {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] =
-    useState(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const dropdownRef =
     useRef<HTMLDivElement>(null);
@@ -21,6 +22,31 @@ function NotificationDropdown() {
   const unreadCount = notifications.filter(
     (notification) => !notification.read
   ).length;
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      setLoading(true);
+      setLoadError(false);
+      try {
+        const runs = await getAnalysisRuns();
+        if (!active) return;
+      setNotifications(runs.slice(0, 8).map((run) => ({
+        id: run.id,
+        title: `${run.repository.name} analysis ${run.status.toLowerCase()}`,
+        message: run.error || `${run.progress}% complete${run.currentStage ? ` · ${run.currentStage}` : ""}`,
+        type: run.status === "FAILED" ? "error" : run.status === "COMPLETED" ? "success" : "info",
+        createdAt: new Date(run.createdAt).toLocaleString(),
+        read: false,
+        })));
+      } catch { if (active) setLoadError(true); }
+      finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [open]);
 
   useEffect(() => {
     function handleOutsideClick(
@@ -149,7 +175,7 @@ function NotificationDropdown() {
             </button>
           </div>
 
-          {notifications.length === 0 ? (
+          {loading ? <div className="p-5 text-sm text-slate-300">Loading recent analysis activity…</div> : loadError ? <div role="alert" className="p-5 text-sm text-red-300">Could not load recent activity.</div> : notifications.length === 0 ? (
             <div className="flex h-56 flex-col items-center justify-center">
               <Bell
                 size={34}
@@ -161,7 +187,7 @@ function NotificationDropdown() {
               </p>
 
               <p className="mt-1 text-sm text-slate-400">
-                AI events will appear here.
+                Analysis activity will appear here.
               </p>
             </div>
           ) : (

@@ -15,16 +15,17 @@ import { FindingSeverity } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { AuditLogger } from "../../utils/audit-logger";
-import type {
-  Finding,
-  Patch,
-  ValidationResult,
-  CreateRepairJobInput,
-  GeneratePatchInput,
-  ApplyPatchInput,
-  FindingStatus,
-  PatchLifecycle,
-  Severity,
+import {
+  canTransitionPatchLifecycle,
+  type Finding,
+  type Patch,
+  type ValidationResult,
+  type CreateRepairJobInput,
+  type GeneratePatchInput,
+  type ApplyPatchInput,
+  type FindingStatus,
+  type PatchLifecycle,
+  type Severity,
 } from "./repair.types";
 import { PatchGenerator } from "./patchGenerator";
 import { PatchValidator } from "./patchValidator";
@@ -83,6 +84,80 @@ function mapPrismaPatch(p: any): Patch {
 /* ------------------------------------------------------------------ */
 
 export class RepairService {
+  static evaluateGuardrailDecision({
+    riskScore,
+    severity,
+    lifecycle,
+    target,
+    projectGuardrails,
+  }: {
+    riskScore: number;
+    severity: Severity | "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
+    lifecycle: PatchLifecycle;
+    target: "WORKSPACE_SANDBOX" | "PROJECT_REPO";
+    projectGuardrails?: {
+      maxPatchRiskScore: number;
+      requireManualApprovalForCritical: boolean;
+      sandboxOnly: boolean;
+      scope: "ADVISORY" | "ENFORCED";
+    } | null;
+  }): { allowed: boolean; reason?: string } {
+    if (!projectGuardrails || projectGuardrails.scope !== "ENFORCED") {
+      return { allowed: true };
+    }
+
+    const riskPercent = Math.round(riskScore * 100);
+    if (riskPercent > projectGuardrails.maxPatchRiskScore) {
+      return {
+        allowed: false,
+        reason: `Patch risk score ${riskPercent}% exceeds the project maximum of ${projectGuardrails.maxPatchRiskScore}%.`,
+      };
+    }
+
+    if (
+      projectGuardrails.requireManualApprovalForCritical &&
+      severity === "CRITICAL" &&
+      lifecycle !== "APPROVED"
+    ) {
+      return {
+        allowed: false,
+        reason: "Critical patches require explicit human approval before validation or application.",
+      };
+    }
+
+    if (projectGuardrails.sandboxOnly && target === "PROJECT_REPO") {
+      return {
+        allowed: false,
+        reason: "This project is configured for sandbox-only patch application.",
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  private static async getProjectGuardrailsForPatch(projectId: string) {
+    const settings = await prisma.guardrailSettings.findUnique({
+      where: { projectId },
+      select: {
+        maxPatchRiskScore: true,
+        requireManualApprovalForCritical: true,
+        sandboxOnly: true,
+        scope: true,
+      },
+    });
+
+    if (!settings) {
+      return null;
+    }
+
+    return {
+      maxPatchRiskScore: settings.maxPatchRiskScore,
+      requireManualApprovalForCritical: settings.requireManualApprovalForCritical,
+      sandboxOnly: settings.sandboxOnly,
+      scope: settings.scope as "ADVISORY" | "ENFORCED",
+    };
+  }
+
   /* ---------------------- RepairJob CRUD -------------------------- */
 
   /**
@@ -332,7 +407,58 @@ export class RepairService {
     return mapPrismaPatch(patch);
   }
 
-  /* ---------------------- Validation / Application -------------------------- */
+  /* ---------------------- Approval / Validation / Application -------------------------- */
+
+  /**
+   * Require explicit human approval before any patch validation or application can proceed.
+   */
+  static async approvePatch(patchId: string, ownerId: string) {
+    const patch = await this.getPatch(patchId, ownerId);
+    const finding = await prisma.finding.findUnique({ where: { id: patch.findingId } });
+    const projectGuardrails = await this.getProjectGuardrailsForPatch(
+      (await prisma.repairJob.findUnique({ where: { id: patch.repairJobId } }))!.projectId,
+    );
+
+    const decision = this.evaluateGuardrailDecision({
+      riskScore: patch.riskScore,
+      severity: (finding?.severity as Severity) ?? "LOW",
+      lifecycle: patch.lifecycle,
+      target: "WORKSPACE_SANDBOX",
+      projectGuardrails,
+    });
+
+    if (!decision.allowed) {
+      throw new ApiError(400, decision.reason ?? "Patch violates the project guardrail policy.");
+    }
+
+    if (!canTransitionPatchLifecycle(patch.lifecycle, "APPROVED")) {
+      throw new ApiError(
+        400,
+        `Patch cannot transition from ${patch.lifecycle} to APPROVED.`,
+      );
+    }
+
+    await prisma.patch.update({
+      where: { id: patchId },
+      data: { lifecycle: "APPROVED" },
+    });
+
+    await prisma.finding.update({
+      where: { id: patch.findingId },
+      data: { status: "REVIEWED" },
+    });
+
+    await AuditLogger.record(
+      ownerId,
+      "PATCH_APPROVE",
+      "Patch",
+      patchId,
+      { findingId: patch.findingId, previousLifecycle: patch.lifecycle },
+      true,
+    );
+
+    return { patchId, status: "APPROVED" as const };
+  }
 
   /**
    * Validate a patch in the sandbox (run tests, lint, type-check, security).
@@ -343,14 +469,34 @@ export class RepairService {
       return { status: "ALREADY_VALIDATED" as const };
     }
 
+    const finding = await prisma.finding.findUnique({ where: { id: patch.findingId } });
+    const job = await prisma.repairJob.findUnique({ where: { id: patch.repairJobId } });
+    const projectGuardrails = await this.getProjectGuardrailsForPatch(job!.projectId);
+    const decision = this.evaluateGuardrailDecision({
+      riskScore: patch.riskScore,
+      severity: (finding?.severity as Severity) ?? "LOW",
+      lifecycle: patch.lifecycle,
+      target: "WORKSPACE_SANDBOX",
+      projectGuardrails,
+    });
+
+    if (!decision.allowed) {
+      throw new ApiError(400, decision.reason ?? "Patch violates the project guardrail policy.");
+    }
+
+    if (!canTransitionPatchLifecycle(patch.lifecycle, "TESTS_RERAN")) {
+      throw new ApiError(
+        400,
+        `Patch must be APPROVED before validation. Current status: ${patch.lifecycle}.`,
+      );
+    }
+
     // Update lifecycle
     await prisma.patch.update({
       where: { id: patchId },
       data: { lifecycle: "TESTS_RERAN" },
     });
 
-    const finding = await prisma.finding.findUnique({ where: { id: patch.findingId } });
-    const job = await prisma.repairJob.findUnique({ where: { id: patch.repairJobId } });
     const repo = await prisma.repository.findUnique({ where: { id: job!.repositoryId } });
 
     // Run validation
@@ -394,6 +540,23 @@ export class RepairService {
       });
     }
 
+    await AuditLogger.record(
+      ownerId,
+      "PATCH_VALIDATE",
+      "Patch",
+      patchId,
+      {
+        findingId: patch.findingId,
+        previousLifecycle: patch.lifecycle,
+        validationStatus: result.status,
+        testsRun: result.testsRun,
+        testsPassed: result.testsPassed,
+        testsFailed: result.testsFailed,
+        failures: result.failures,
+      },
+      result.status === "PASS",
+    );
+
     return { validation, patchLifecycle: newLifecycle };
   }
 
@@ -402,9 +565,24 @@ export class RepairService {
    */
   static async applyPatch(patchId: string, ownerId: string, targetRepo = false) {
     const patch = await this.getPatch(patchId, ownerId);
+    const finding = await prisma.finding.findUnique({ where: { id: patch.findingId } });
+    const job = await prisma.repairJob.findUnique({ where: { id: patch.repairJobId } });
+    const projectGuardrails = await this.getProjectGuardrailsForPatch(job!.projectId);
 
     if (patch.lifecycle !== "VALIDATED") {
       throw new ApiError(400, "Patch must be VALIDATED before applying");
+    }
+
+    const decision = this.evaluateGuardrailDecision({
+      riskScore: patch.riskScore,
+      severity: (finding?.severity as Severity) ?? "LOW",
+      lifecycle: patch.lifecycle,
+      target: targetRepo ? "PROJECT_REPO" : "WORKSPACE_SANDBOX",
+      projectGuardrails,
+    });
+
+    if (!decision.allowed) {
+      throw new ApiError(400, decision.reason ?? "Patch violates the project guardrail policy.");
     }
 
     // Update lifecycle
@@ -413,8 +591,6 @@ export class RepairService {
       data: { lifecycle: "PATCH_APPLIED_IN_WORKSPACE" },
     });
 
-    const finding = await prisma.finding.findUnique({ where: { id: patch.findingId } });
-    const job = await prisma.repairJob.findUnique({ where: { id: patch.repairJobId } });
     const repo = await prisma.repository.findUnique({ where: { id: job!.repositoryId } });
 
     if (targetRepo && repo?.workspacePath) {
@@ -466,6 +642,22 @@ export class RepairService {
         },
       });
     }
+
+    await AuditLogger.record(
+      ownerId,
+      "PATCH_APPLY",
+      "Patch",
+      patchId,
+      {
+        findingId: patch.findingId,
+        targetRepo,
+        target: targetRepo ? "PROJECT_REPO" : "WORKSPACE_SANDBOX",
+        success: result.success,
+        output: result.output,
+        error: result.error,
+      },
+      result.success,
+    );
 
     return result;
   }

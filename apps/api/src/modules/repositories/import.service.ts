@@ -13,13 +13,12 @@ import { ZipService } from "./zip.service";
 export class ImportService {
   static async importFromGitHub(
     repositoryId: string,
-    url: string
+    url: string,
+    ownerId: string,
   ) {
     const repository =
-      await prisma.repository.findUnique({
-        where: {
-          id: repositoryId,
-        },
+      await prisma.repository.findFirst({
+        where: { id: repositoryId, project: { ownerId } },
       });
 
     if (!repository) {
@@ -38,12 +37,9 @@ export class ImportService {
       },
     });
 
-    const workspace =
-      await GitHubService.cloneRepository(
-        url
-      );
-
+    let workspace: string | undefined;
     try {
+      workspace = await GitHubService.cloneRepository(url);
       const tree =
         await FileScannerService.scan(
           workspace
@@ -97,12 +93,13 @@ export class ImportService {
         data: {
           status:
             RepositoryStatus.FAILED,
+          workspacePath: workspace ? null : repository.workspacePath,
         },
       });
 
-      await GitHubService.deleteRepository(
-        workspace
-      );
+      if (workspace) {
+        await GitHubService.deleteRepository(workspace);
+      }
 
       throw error;
     }
@@ -111,12 +108,11 @@ export class ImportService {
   static async importFromZip(
     repositoryId: string,
     archivePath: string,
+    ownerId: string,
   ) {
     const repository =
-      await prisma.repository.findUnique({
-        where: {
-          id: repositoryId,
-        },
+      await prisma.repository.findFirst({
+        where: { id: repositoryId, project: { ownerId } },
       });
 
     if (!repository) {
@@ -135,63 +131,53 @@ export class ImportService {
       },
     });
 
+    let workspace: string | undefined;
     try {
-      const workspace =
-        await ZipService.extract(
-          archivePath,
-        );
-
-      try {
-        const tree =
-          await FileScannerService.scan(
-            workspace,
-          );
-
-        const indexedFiles =
-          await FileIndexService.index(
-            repositoryId,
-            tree,
-          );
-
-        await prisma.repository.update({
-          where: {
-            id: repositoryId,
-          },
-          data: {
-            provider: "ZIP",
-            workspacePath: workspace,
-          },
-        });
-
-        const indexingResult =
-          await retrievalService.indexRepository(
-            repositoryId,
-          );
-
-        await prisma.repository.update({
-          where: {
-            id: repositoryId,
-          },
-          data: {
-            status:
-              RepositoryStatus.INDEXED,
-          },
-        });
-
-        return {
-          success: true,
-          workspace,
-          indexedFiles,
-          indexingResult,
-          message:
-            "ZIP repository imported and indexed successfully.",
-        };
-      } catch (error) {
-        await ZipService.cleanup(
+      workspace = await ZipService.extract(archivePath);
+      const tree =
+        await FileScannerService.scan(
           workspace,
         );
-        throw error;
-      }
+
+      const indexedFiles =
+        await FileIndexService.index(
+          repositoryId,
+          tree,
+        );
+
+      await prisma.repository.update({
+        where: {
+          id: repositoryId,
+        },
+        data: {
+          provider: "ZIP",
+          workspacePath: workspace,
+        },
+      });
+
+      const indexingResult =
+        await retrievalService.indexRepository(
+          repositoryId,
+        );
+
+      await prisma.repository.update({
+        where: {
+          id: repositoryId,
+        },
+        data: {
+          status:
+            RepositoryStatus.INDEXED,
+        },
+      });
+
+      return {
+        success: true,
+        workspace,
+        indexedFiles,
+        indexingResult,
+        message:
+          "ZIP repository imported and indexed successfully.",
+      };
     } catch (error) {
       await prisma.repository.update({
         where: {
@@ -200,8 +186,13 @@ export class ImportService {
         data: {
           status:
             RepositoryStatus.FAILED,
+          workspacePath: workspace ? null : repository.workspacePath,
         },
       });
+
+      if (workspace) {
+        await ZipService.cleanup(workspace);
+      }
 
       throw error;
     } finally {

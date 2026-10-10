@@ -10,6 +10,46 @@ import { prisma } from "../../config/prisma";
  * Zero-cost: generates static YAML files - no external API calls needed.
  */
 export class CiIntegrationService {
+  static evaluateMergeGateDecision({
+    criticalCount,
+    highCount,
+    projectGuardrails,
+  }: {
+    criticalCount: number;
+    highCount: number;
+    projectGuardrails?: {
+      maxPatchRiskScore: number;
+      requireManualApprovalForCritical: boolean;
+      sandboxOnly: boolean;
+      scope: "ADVISORY" | "ENFORCED";
+    } | null;
+  }): { allowed: boolean; reason: string } {
+    if (!projectGuardrails || projectGuardrails.scope !== "ENFORCED") {
+      return { allowed: true, reason: "All checks passed" };
+    }
+
+    const totalFindings = criticalCount + highCount;
+    const riskPercent = totalFindings === 0
+      ? 0
+      : Math.min(100, Math.round(((criticalCount * 100) + (highCount * 50)) / totalFindings));
+
+    if (projectGuardrails.requireManualApprovalForCritical && criticalCount > 0) {
+      return {
+        allowed: false,
+        reason: `${criticalCount} critical finding(s) require explicit approval before merge.`,
+      };
+    }
+
+    if (riskPercent > projectGuardrails.maxPatchRiskScore) {
+      return {
+        allowed: false,
+        reason: `Merge gate risk score ${riskPercent}% exceeds the project maximum of ${projectGuardrails.maxPatchRiskScore}%.`,
+      };
+    }
+
+    return { allowed: true, reason: "All checks passed" };
+  }
+
   /**
    * Generate GitHub Actions workflow for running Aegis analysis on PRs
    */
@@ -383,15 +423,37 @@ export class CiIntegrationService {
       allowedFailures?: string[];
     } = {},
   ): Promise<{ allowed: boolean; reason: string; findings: number }> {
-    const findings = await prisma.toolExecution.findMany({
+    const run = await prisma.analysisRun.findUnique({
+      where: { id: runId },
+      select: { status: true, projectId: true },
+    });
+    if (!run) {
+      return { allowed: false, reason: "Analysis run not found", findings: 0 };
+    }
+
+    if (run.status !== "COMPLETED") {
+      return {
+        allowed: false,
+        reason: `Analysis run is ${run.status.toLowerCase()}; results are not final`,
+        findings: 0,
+      };
+    }
+
+    const executions = await prisma.toolExecution.findMany({
       where: { analysisRunId: runId },
       select: { evidence: true, status: true, command: true },
     });
 
     let criticalCount = 0;
     let highCount = 0;
+    const allowedFailures = options.allowedFailures ?? [];
+    const evaluated = executions.filter(({ command }) => !allowedFailures.includes(command));
+    const skipped = evaluated.filter(({ status }) => status.toUpperCase() === "SKIPPED");
+    const unsuccessful = evaluated.filter(({ status }) =>
+      status.toUpperCase() !== "COMPLETED" && status.toUpperCase() !== "SKIPPED",
+    );
 
-    for (const execution of findings) {
+    for (const execution of evaluated) {
       const evidence = Array.isArray(execution.evidence) ? execution.evidence : [];
       for (const item of evidence) {
         if (!item || typeof item !== "object" || !("severity" in item)) continue;
@@ -400,8 +462,58 @@ export class CiIntegrationService {
         if (severity === "high") highCount++;
       }
     }
+    const findingCount = criticalCount + highCount;
 
-    const allowedFailures = options.allowedFailures ?? [];
+    if (evaluated.length === 0) {
+      return { allowed: false, reason: "No checks were evaluated", findings: 0 };
+    }
+    if (unsuccessful.length > 0) {
+      return {
+        allowed: false,
+        reason: `${unsuccessful.length} check(s) did not complete successfully`,
+        findings: findingCount,
+      };
+    }
+    if (skipped.length > 0) {
+      return {
+        allowed: false,
+        reason: `${skipped.length} check(s) were skipped; merge gate is inconclusive`,
+        findings: findingCount,
+      };
+    }
+
+    const projectGuardrails = run.projectId
+      ? await prisma.guardrailSettings.findUnique({
+          where: { projectId: run.projectId },
+          select: {
+            maxPatchRiskScore: true,
+            requireManualApprovalForCritical: true,
+            sandboxOnly: true,
+            scope: true,
+          },
+        })
+      : null;
+
+    const guardrailDecision = CiIntegrationService.evaluateMergeGateDecision({
+      criticalCount,
+      highCount,
+      projectGuardrails: projectGuardrails
+        ? {
+            maxPatchRiskScore: projectGuardrails.maxPatchRiskScore,
+            requireManualApprovalForCritical: projectGuardrails.requireManualApprovalForCritical,
+            sandboxOnly: projectGuardrails.sandboxOnly,
+            scope: projectGuardrails.scope as "ADVISORY" | "ENFORCED",
+          }
+        : null,
+    });
+
+    if (!guardrailDecision.allowed) {
+      return {
+        allowed: false,
+        reason: guardrailDecision.reason,
+        findings: criticalCount + highCount,
+      };
+    }
 
     if (options.failOnCritical !== false && criticalCount > 0) {
       return {

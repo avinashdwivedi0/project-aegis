@@ -1,15 +1,18 @@
 import crypto from "node:crypto";
-import fs from "fs/promises";
 import path from "path";
+import fg from "fast-glob";
 
 import { ContainerRunnerService } from "./container-runner.service";
-import type {
-  ToolAdapter,
-  ToolAdapterResult,
-  ToolEvidence,
+import {
+  createCompletionEvidence,
+  type ToolAdapter,
+  type ToolAdapterResult,
+  type ToolEvidence,
 } from "./tool-adapter.types";
 
 type AuditVulnerability = {
+  name?: string;
+  module_name?: string;
   severity?: string;
   title?: string;
   url?: string;
@@ -25,26 +28,15 @@ export class DependencyAuditAdapter implements ToolAdapter {
   readonly version = "npm-audit";
 
   async canRun(workspace: string) {
-    try {
-      await fs.access(path.join(workspace, "pnpm-lock.yaml"));
-      return true;
-    } catch {
-      try {
-        await fs.access(path.join(workspace, "package-lock.json"));
-        return true;
-      } catch {
-        return false;
-      }
-    }
+    return (await this.lockfileDirectories(workspace)).length > 0;
   }
 
   async run(
     workspace: string,
     signal?: AbortSignal,
   ): Promise<ToolAdapterResult> {
-    const packageManager = await this.packageManager(workspace);
-
-    if (!packageManager) {
+    const lockfileDirectories = await this.lockfileDirectories(workspace);
+    if (!lockfileDirectories.length) {
       return {
         tool: this.name,
         toolVersion: this.version,
@@ -55,43 +47,65 @@ export class DependencyAuditAdapter implements ToolAdapter {
       };
     }
 
-    const command = packageManager === "pnpm"
-      ? ["pnpm", "audit", "--json"]
-      : ["npm", "audit", "--json"];
-    const execution = await ContainerRunnerService.run({
-      command: packageManager,
-      args: command.slice(1),
-      workspace,
-      signal,
-    });
-    const evidence = this.parseOutput(execution.stdout);
-    const reportParsed = evidence.length > 0 ||
-      execution.stdout.trim().startsWith("{");
+    const executions = [];
+    const evidence: ToolEvidence[] = [];
+    for (const item of lockfileDirectories) {
+      const command = item.packageManager === "pnpm" ? "pnpm" : "npm";
+      const args = item.packageManager === "pnpm"
+        ? ["--dir", item.directory || ".", "audit", "--json"]
+        : ["audit", "--prefix", path.posix.join("/workspace", item.directory), "--json"];
+      const execution = await ContainerRunnerService.run({ command, args, workspace, signal });
+      executions.push({ ...execution, directory: item.directory, packageManager: item.packageManager });
+      evidence.push(...this.parseOutput(execution.stdout).map((finding) => ({
+        ...finding,
+        packageName: [item.directory, finding.packageName].filter(Boolean).join(":"),
+      })));
+      if (signal?.aborted) break;
+    }
+    const failedExecution = executions.find(({ status }) => status !== "COMPLETED");
+    const execution = {
+      command: executions[0]?.command ?? "npm",
+      args: [],
+      status: failedExecution ? failedExecution.status : "COMPLETED",
+      exitCode: failedExecution?.exitCode ?? 0,
+      stdout: executions.map(({ directory, stdout }) => `[${directory || "."}]\n${stdout}`).join("\n"),
+      stderr: executions.map(({ directory, stderr }) => stderr ? `[${directory || "."}]\n${stderr}` : "").filter(Boolean).join("\n"),
+      durationMs: executions.reduce((total, item) => total + item.durationMs, 0),
+    };
+    const reportParsed = executions.length > 0 && executions.every(({ stdout }) => this.hasAuditReport(stdout));
+    if (reportParsed && evidence.length === 0) {
+      evidence.push(createCompletionEvidence(
+        this.name,
+        this.version,
+        "Dependency audit completed with no known vulnerabilities reported.",
+      ));
+    }
 
     return {
       tool: this.name,
       toolVersion: this.version,
       status: reportParsed ? "completed" : "failed",
-      command,
+      command: ["dependency-audit", ...execution.args],
       execution,
       evidence,
     };
   }
 
-  private async packageManager(
-    workspace: string,
-  ): Promise<"pnpm" | "npm" | undefined> {
-    try {
-      await fs.access(path.join(workspace, "pnpm-lock.yaml"));
-      return "pnpm";
-    } catch {
-      try {
-        await fs.access(path.join(workspace, "package-lock.json"));
-        return "npm";
-      } catch {
-        return undefined;
-      }
+  private async lockfileDirectories(workspace: string) {
+    const lockfiles = await fg(["**/pnpm-lock.yaml", "**/package-lock.json"], {
+      cwd: workspace,
+      onlyFiles: true,
+      ignore: ["**/.git/**", "**/node_modules/**", "**/vendor/**", "**/dist/**", "**/build/**", "**/coverage/**", "**/.venv/**"],
+      suppressErrors: true,
+    });
+    const managersByDirectory = new Map<string, "pnpm" | "npm">();
+    for (const lockfile of lockfiles.sort()) {
+      const directory = path.posix.dirname(lockfile) === "." ? "" : path.posix.dirname(lockfile);
+      const packageManager = path.posix.basename(lockfile) === "pnpm-lock.yaml" ? "pnpm" : "npm";
+      const current = managersByDirectory.get(directory);
+      if (!current || packageManager === "pnpm") managersByDirectory.set(directory, packageManager);
     }
+    return [...managersByDirectory.entries()].map(([directory, packageManager]) => ({ directory, packageManager }));
   }
 
   private parseOutput(output: string): ToolEvidence[] {
@@ -117,9 +131,21 @@ export class DependencyAuditAdapter implements ToolAdapter {
       status: "failed",
       message: vulnerability.title ?? "Dependency vulnerability detected.",
       severity: this.normalizeSeverity(vulnerability.severity),
-      packageName,
+      packageName: vulnerability.name ?? vulnerability.module_name ?? packageName,
       code: vulnerability.url,
     }));
+  }
+
+  private hasAuditReport(output: string) {
+    const start = output.indexOf("{");
+    const end = output.lastIndexOf("}");
+    if (start < 0 || end < start) return false;
+    try {
+      const report = JSON.parse(output.slice(start, end + 1)) as AuditReport;
+      return Boolean(report.vulnerabilities || report.advisories);
+    } catch {
+      return false;
+    }
   }
 
   private normalizeSeverity(

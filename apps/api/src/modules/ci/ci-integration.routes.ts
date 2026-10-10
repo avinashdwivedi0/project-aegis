@@ -8,9 +8,9 @@ import { ApiError } from "../../utils/ApiError";
 const router = Router();
 
 /**
- * Strict CUID identifier pattern: "c" + 23 lowercase alphanumeric chars
+ * Prisma CUID identifiers are 25 characters: "c" + 24 lowercase alphanumeric chars.
  */
-const CUID_PATTERN = /^c[a-z0-9]{23}$/;
+const CUID_PATTERN = /^c[a-z0-9]{24}$/;
 
 /**
  * POST /api/projects/:id/ci-config

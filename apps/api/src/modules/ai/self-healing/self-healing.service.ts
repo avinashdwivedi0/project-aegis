@@ -9,10 +9,17 @@ import { GroqAgentProvider } from "../agents/gemini.provider";
 import { resolvePromptPath } from "../prompt-path";
 
 import {
+  canTransitionSelfHealingStatus,
+  canRetrySelfHealingStatus,
+  containsForbiddenXPathSelector,
+  MAX_SELF_HEALING_RETRIES,
+  resolveSelfHealingValidationOutcome,
   selfHealingInputSchema,
   selfHealingProposalSchema,
   type SelfHealingInput,
+  type SelfHealingLifecycleStatus,
 } from "./self-healing.types";
+import { localSelfHealingService } from "./local-self-healing.service";
 
 const PROMPT_PATH = path.resolve(
   process.cwd(),
@@ -32,6 +39,10 @@ export class SelfHealingService {
     input: SelfHealingInput,
   ) {
     const validatedInput = selfHealingInputSchema.parse(input);
+    if (process.env.AGENT_MODE?.trim() === "local") {
+      return localSelfHealingService.propose(ownerId, validatedInput);
+    }
+
     const repository = await prisma.repository.findFirst({
       where: {
         id: validatedInput.repositoryId,
@@ -71,14 +82,17 @@ export class SelfHealingService {
       );
     }
 
-    const proposal = selfHealingProposalSchema.parse(parsed);
-    if (proposal.locator.includes("xpath") || proposal.locator.includes("//")) {
+    const proposal = selfHealingProposalSchema.parse({
+      ...(typeof parsed === "object" && parsed !== null ? parsed : {}),
+      contractVersion: "1.0",
+    });
+    if (containsForbiddenXPathSelector(proposal.locator)) {
       throw new Error(
         "Self-Healing Agent returned a prohibited XPath locator.",
       );
     }
 
-    return prisma.selfHealingProposal.create({
+    const saved = await prisma.selfHealingProposal.create({
       data: {
         repositoryId: validatedInput.repositoryId,
         testRunId: validatedInput.testRunId,
@@ -93,9 +107,10 @@ export class SelfHealingService {
         status: "PENDING",
       },
     });
+    return { ...saved, contractVersion: proposal.contractVersion, locator: proposal.locator };
   }
 
-  async list(ownerId: string, repositoryId?: string, status?: "PENDING" | "APPROVED" | "REJECTED") {
+  async list(ownerId: string, repositoryId?: string, status?: SelfHealingLifecycleStatus) {
     return prisma.selfHealingProposal.findMany({
       where: {
         repository: {
@@ -108,10 +123,10 @@ export class SelfHealingService {
     });
   }
 
-  async review(
+  async transitionLifecycle(
     ownerId: string,
     proposalId: string,
-    status: "APPROVED" | "REJECTED",
+    status: SelfHealingLifecycleStatus,
   ) {
     const proposal = await prisma.selfHealingProposal.findFirst({
       where: {
@@ -128,22 +143,23 @@ export class SelfHealingService {
       );
     }
 
-    if (proposal.status !== "PENDING") {
-      throw new Error("Only pending proposals can be reviewed.");
+    if (!canTransitionSelfHealingStatus(proposal.status, status)) {
+      throw new Error(
+        `Invalid self-healing transition from ${proposal.status} to ${status}.`,
+      );
     }
 
     const updatedProposal = await prisma.selfHealingProposal.update({
       where: { id: proposalId },
       data: {
         status,
-        reviewedAt: new Date(),
+        reviewedAt: status === "APPROVED" || status === "REJECTED" ? new Date() : proposal.reviewedAt,
       },
     });
 
-    // Audit log the review action
     await AuditLogger.record(
       ownerId,
-      status === "APPROVED" ? "SELF_HEAL_APPROVE" : "SELF_HEAL_REJECT",
+      `SELF_HEAL_${status}`,
       "SelfHealingProposal",
       proposalId,
       {
@@ -155,6 +171,163 @@ export class SelfHealingService {
     );
 
     return updatedProposal;
+  }
+
+  async review(
+    ownerId: string,
+    proposalId: string,
+    status: "APPROVED" | "REJECTED",
+  ) {
+    return this.transitionLifecycle(ownerId, proposalId, status);
+  }
+
+  async retry(
+    ownerId: string,
+    proposalId: string,
+  ) {
+    const proposal = await prisma.selfHealingProposal.findFirst({
+      where: {
+        id: proposalId,
+        repository: {
+          project: { ownerId },
+        },
+      },
+    });
+
+    if (!proposal) {
+      throw new Error(
+        "Self-healing proposal not found or access denied.",
+      );
+    }
+
+    if (proposal.status !== "ROLLED_BACK" && proposal.status !== "REJECTED") {
+      throw new Error(
+        `Proposal cannot be retried while in ${proposal.status} state.`,
+      );
+    }
+
+    if (!canRetrySelfHealingStatus(proposal.status, proposal.retryCount)) {
+      throw new Error(
+        `Proposal has reached the maximum of ${MAX_SELF_HEALING_RETRIES} retries.`,
+      );
+    }
+
+    const nextRetryCount = proposal.retryCount + 1;
+    const retryResult = await prisma.selfHealingProposal.updateMany({
+      where: {
+        id: proposalId,
+        status: proposal.status,
+        retryCount: proposal.retryCount,
+      },
+      data: {
+        retryCount: { increment: 1 },
+      },
+    });
+
+    if (retryResult.count !== 1) {
+      throw new Error("Proposal changed state or reached the maximum retry limit.");
+    }
+
+    const retriedProposal = await this.propose(ownerId, {
+      repositoryId: proposal.repositoryId,
+      testRunId: proposal.testRunId,
+      testCaseId: proposal.testCaseId,
+      failedLocator: proposal.failedLocator,
+      domSnapshot: proposal.domSnapshot,
+      screenshot: proposal.screenshot,
+    });
+    const updatedRetry = await prisma.selfHealingProposal.update({
+      where: { id: retriedProposal.id },
+      data: {
+        retryCount: nextRetryCount,
+        parentProposalId: proposal.id,
+        reasoning: `${retriedProposal.reasoning}\nRetry ${nextRetryCount} generated from proposal ${proposal.id}.`,
+      },
+    });
+
+    await AuditLogger.record(
+      ownerId,
+      "SELF_HEAL_RETRY",
+      "SelfHealingProposal",
+      proposalId,
+      {
+        strategy: proposal.strategy,
+        confidence: proposal.confidence,
+        previousStatus: proposal.status,
+        retryCount: nextRetryCount,
+        generatedProposalId: retriedProposal.id,
+      },
+      true,
+    );
+
+    return updatedRetry;
+  }
+
+  async validate(
+    ownerId: string,
+    proposalId: string,
+    passed: boolean,
+    reason?: string,
+  ) {
+    const proposal = await prisma.selfHealingProposal.findFirst({
+      where: {
+        id: proposalId,
+        repository: {
+          project: { ownerId },
+        },
+      },
+    });
+
+    if (!proposal) {
+      throw new Error(
+        "Self-healing proposal not found or access denied.",
+      );
+    }
+
+    if (proposal.status !== "APPROVED") {
+      throw new Error(
+        `Proposal must be APPROVED before validation. Current status: ${proposal.status}.`,
+      );
+    }
+
+    const validatingStatus: SelfHealingLifecycleStatus = "VALIDATING";
+    const nextStatus = resolveSelfHealingValidationOutcome(passed);
+
+    const updatedProposal = await prisma.selfHealingProposal.update({
+      where: { id: proposalId },
+      data: {
+        status: validatingStatus,
+        reviewedAt: new Date(),
+      },
+    });
+
+    const finalProposal = await prisma.selfHealingProposal.update({
+      where: { id: proposalId },
+      data: {
+        status: nextStatus,
+        reviewedAt: new Date(),
+        reasoning: reason && reason.trim().length > 0
+          ? `${proposal.reasoning}\nValidation: ${reason.trim()}`
+          : proposal.reasoning,
+      },
+    });
+
+    await AuditLogger.record(
+      ownerId,
+      passed ? "SELF_HEAL_VALIDATED" : "SELF_HEAL_ROLLED_BACK",
+      "SelfHealingProposal",
+      proposalId,
+      {
+        strategy: proposal.strategy,
+        confidence: proposal.confidence,
+        previousStatus: proposal.status,
+        validationPassed: passed,
+        reason: reason ?? null,
+      },
+      true,
+    );
+
+    return finalProposal;
   }
 }
 

@@ -12,8 +12,15 @@ export type ContainerRunOptions = {
     hostPath: string;
     containerPath: string;
   }>;
+  readonlyMounts?: Array<{
+    hostPath: string;
+    containerPath: string;
+  }>;
   environment?: Record<string, string>;
   image?: string;
+  memoryLimitMb?: 512 | 2048;
+  cpuLimit?: 1 | 2;
+  pidsLimit?: 128 | 512;
   timeoutMs?: number;
   maxOutputBytes?: number;
   signal?: AbortSignal;
@@ -43,35 +50,55 @@ export function buildContainerArgs(
     throw new Error("Tool command is not allowed.");
   }
 
+  // Use workspace path directly - Docker Desktop handles Windows paths
+  let dockerWorkspace = workspace;
+  let dockerMountPath = workspace;
+  const packageManagerEntrypoint = options.command === "npm" || options.command === "npx"
+    ? [`--entrypoint=${executable}`]
+    : options.command === "pnpm"
+      ? ["--entrypoint=corepack"]
+      : [];
+  const commandArguments = options.command === "npm" || options.command === "npx"
+    ? options.args
+    : options.command === "pnpm"
+      ? ["pnpm", ...options.args]
+      : [executable, ...options.args];
+  const environment = options.command === "pnpm"
+    ? { HOME: "/tmp", COREPACK_HOME: "/tmp/corepack", ...options.environment }
+    : options.environment;
+
   return [
     "run",
     "--rm",
     "--init",
-    "--network=none",
     "--read-only",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges:true",
     "--user=65532:65532",
-    "--pids-limit=128",
-    "--memory=512m",
-    "--cpus=1.0",
+    `--pids-limit=${options.pidsLimit ?? 128}`,
+    `--memory=${options.memoryLimitMb ?? 512}m`,
+    `--cpus=${(options.cpuLimit ?? 1).toFixed(1)}`,
     "--tmpfs=/tmp:rw,noexec,nosuid,size=64m",
     "--mount",
-    `type=bind,src=${workspace},dst=/workspace,readonly`,
+    `type=bind,src=${dockerWorkspace},dst=/workspace,readonly`,
     "--workdir=/workspace",
     ...(options.writableMounts ?? []).flatMap((mount) => [
       "--mount",
       `type=bind,src=${path.resolve(mount.hostPath)},dst=${mount.containerPath}`,
     ]),
-    ...(options.environment
-      ? Object.entries(options.environment).flatMap(([key, value]) => [
+    ...(options.readonlyMounts ?? []).flatMap((mount) => [
+      "--mount",
+      `type=bind,src=${path.resolve(mount.hostPath)},dst=${mount.containerPath},readonly`,
+    ]),
+    ...(environment
+      ? Object.entries(environment).flatMap(([key, value]) => [
           "--env",
           `${key}=${value}`,
         ])
       : []),
+    ...packageManagerEntrypoint,
     image,
-    executable,
-    ...options.args,
+    ...commandArguments,
   ];
 }
 

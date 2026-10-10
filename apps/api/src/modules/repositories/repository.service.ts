@@ -95,6 +95,12 @@ export class RepositoryService {
         isPrivate:
           data.isPrivate ?? false,
         workspacePath: data.workspacePath ?? null,
+        // A repository without an imported/attached workspace cannot be
+        // analyzed. Keep the incomplete state visible instead of presenting
+        // it as an active, ready repository.
+        status: data.workspacePath
+          ? RepositoryStatus.ACTIVE
+          : RepositoryStatus.FAILED,
         projectId,
       },
     });

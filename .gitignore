@@ -17,6 +17,12 @@ dist/
 build/
 coverage/
 
+# Generated test and analysis output
+results/
+test-results/
+playwright-report/
+blob-report/
+
 # IDE
 .vscode/settings.json
 .idea/

@@ -1,14 +1,11 @@
-import {
-  NextFunction,
-  Request,
-  Response,
-} from "express";
+import type { NextFunction, Response } from "express";
 
+import type { AuthenticatedRequest } from "../../middleware/auth.middleware";
 import { ImportService } from "./import.service";
 
 export class ImportController {
   static async importGitHub(
-    req: Request,
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ) {
@@ -31,6 +28,7 @@ export class ImportController {
         await ImportService.importFromGitHub(
           repositoryId,
           url,
+          req.user.userId,
         );
 
       return res.status(200).json({
@@ -45,7 +43,7 @@ export class ImportController {
   }
 
   static async importZip(
-    req: Request,
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ) {
@@ -66,6 +64,7 @@ export class ImportController {
         await ImportService.importFromZip(
           repositoryId,
           req.file.path,
+          req.user.userId,
         );
 
       return res.status(200).json({

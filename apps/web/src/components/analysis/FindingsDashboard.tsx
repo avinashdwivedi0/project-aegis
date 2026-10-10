@@ -1,7 +1,7 @@
 import { AlertTriangle, CheckCircle2, CircleDot, Download, Loader2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
-import { downloadAnalysisReport, generatePatch, getAnalysisScore, getFindings, rejectPatch, type Finding } from "@/services/analysis";
+import { approvePatch, applyPatch, createPatchPullRequest, downloadAnalysisReport, generatePatch, getAnalysisScore, getFindings, getPatch, rejectPatch, validatePatch, type Finding } from "@/services/analysis";
 import DiffViewer from "./DiffViewer";
 
 const severityStyles: Record<string, string> = {
@@ -27,6 +27,12 @@ export default function FindingsDashboard({ runId }: { runId: string }) {
   const [bridgeStatus, setBridgeStatus] = useState<"PENDING" | "COMPLETED" | "FAILED" | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [patchActionError, setPatchActionError] = useState("");
+  const [patchActionMessage, setPatchActionMessage] = useState("");
+  const [patchActionLoading, setPatchActionLoading] = useState(false);
+  const [githubToken, setGithubToken] = useState("");
+  const [pullRequestTitle, setPullRequestTitle] = useState("");
+  const [pullRequestUrl, setPullRequestUrl] = useState("");
 
   // Poll bridge status until it leaves PENDING
   useEffect(() => {
@@ -112,7 +118,11 @@ export default function FindingsDashboard({ runId }: { runId: string }) {
     setPatchLoading(true);
     try {
       const patch = await generatePatch(selectedFinding.repairFindingId);
-      setSelectedFinding({ ...selectedFinding, diffContent: patch.diffContent });
+      setSelectedFinding({ ...selectedFinding, diffContent: patch.diffContent, patchId: patch.patchId, status: patch.lifecycle });
+      setFindings((current) => current.map((finding) => finding.id === selectedFinding.id ? { ...finding, diffContent: patch.diffContent, patchId: patch.patchId, status: patch.lifecycle } : finding));
+      setPatchActionError("");
+    } catch {
+      setPatchActionError("Could not generate a patch for this finding.");
     } finally {
       setPatchLoading(false);
     }
@@ -128,16 +138,86 @@ export default function FindingsDashboard({ runId }: { runId: string }) {
     }
   }
 
+  async function handleApprovePatch() {
+    if (!selectedFinding?.patchId || patchActionLoading) return;
+    setPatchActionLoading(true);
+    setPatchActionError("");
+    try {
+      const result = await approvePatch(selectedFinding.patchId);
+      setSelectedFinding({ ...selectedFinding, status: result.status });
+      setFindings((current) => current.map((finding) => finding.id === selectedFinding.id ? { ...finding, status: result.status } : finding));
+      setPatchActionMessage("Patch approved and ready for validation.");
+    } catch {
+      setPatchActionError("Could not approve this patch. Check whether it is eligible for approval.");
+    } finally {
+      setPatchActionLoading(false);
+    }
+  }
+
   async function handleRejectPatch() {
     if (!selectedFinding?.patchId || rejectLoading) return;
     setRejectLoading(true);
     try {
       await rejectPatch(selectedFinding.patchId);
-      setSelectedFinding({ ...selectedFinding, status: "rejected" });
-      setFindings((current) => current.map((finding) => finding.id === selectedFinding.id ? { ...finding, status: "rejected" } : finding));
+      setSelectedFinding({ ...selectedFinding, status: "REJECTED" });
+      setFindings((current) => current.map((finding) => finding.id === selectedFinding.id ? { ...finding, status: "REJECTED" } : finding));
+      setPatchActionError("");
+    } catch {
+      setPatchActionError("Could not reject this patch. It may already have been validated or applied.");
     } finally {
       setRejectLoading(false);
     }
+  }
+
+  async function handleValidatePatch() {
+    if (!selectedFinding?.patchId || patchActionLoading) return;
+    if (selectedFinding.status !== "APPROVED") {
+      setPatchActionError("This patch must be explicitly approved before validation can run.");
+      return;
+    }
+    setPatchActionLoading(true);
+    setPatchActionError("");
+    try {
+      const patch = await getPatch(selectedFinding.patchId);
+      setSelectedFinding((current) => current ? { ...current, diffContent: patch.diffContent, status: patch.lifecycle } : current);
+      const result = await validatePatch(selectedFinding.patchId);
+      const lifecycle = result.patchLifecycle;
+      setSelectedFinding({ ...selectedFinding, status: lifecycle });
+      setFindings((current) => current.map((finding) => finding.id === selectedFinding.id ? { ...finding, status: lifecycle } : finding));
+      setPatchActionMessage(lifecycle === "VALIDATED" ? "Patch validation passed." : "Validation completed and the patch was rejected.");
+    } catch {
+      setPatchActionError("Patch validation failed. Check that the repository workspace is available.");
+    } finally { setPatchActionLoading(false); }
+  }
+
+  async function handleApplyPatch() {
+    if (!selectedFinding?.patchId || patchActionLoading || !window.confirm("Apply this validated patch to the isolated workspace?")) return;
+    setPatchActionLoading(true);
+    setPatchActionError("");
+    try {
+      const result = await applyPatch(selectedFinding.patchId);
+      if (!result.success) throw new Error(result.error || result.output);
+      setSelectedFinding({ ...selectedFinding, status: "PATCH_APPLIED_IN_WORKSPACE" });
+      setFindings((current) => current.map((finding) => finding.id === selectedFinding.id ? { ...finding, status: "PATCH_APPLIED_IN_WORKSPACE" } : finding));
+      setPatchActionMessage(result.output || "Patch applied to the isolated workspace.");
+      setPatchActionError("");
+    } catch (reason) {
+      setPatchActionError(reason instanceof Error ? reason.message : "Could not apply patch to the workspace.");
+    } finally { setPatchActionLoading(false); }
+  }
+
+  async function handleCreatePullRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedFinding?.patchId || patchActionLoading || !githubToken.trim() || !pullRequestTitle.trim()) return;
+    setPatchActionLoading(true);
+    setPatchActionError("");
+    try {
+      const result = await createPatchPullRequest(selectedFinding.patchId, githubToken.trim(), pullRequestTitle.trim(), `Generated repair patch for finding ${selectedFinding.id}.`);
+      setPullRequestUrl(result.html_url ?? result.url ?? "");
+      setGithubToken("");
+    } catch {
+      setPatchActionError("Could not create the pull request. Confirm the token has repository write access and the patch is validated.");
+    } finally { setPatchActionLoading(false); }
   }
 
   return (
@@ -195,7 +275,12 @@ export default function FindingsDashboard({ runId }: { runId: string }) {
       {!loading && !error && findings.length === 0 && <p className="py-8 text-sm text-[#667085]">No findings match the selected filters.</p>}
       {!loading && !error && findings.length > 0 && !findings.some((f) => f.repairFindingId) && <div className="py-4 text-sm text-amber-700 bg-amber-50 rounded-lg px-4">Repair bridge not yet populated — patch actions are unavailable until the analysis run is bridged to the repair engine.</div>}
       {!loading && !error && findings.length > 0 && <div className="divide-y divide-[#edf0f4]">{findings.map((finding) => <button key={finding.id} type="button" onClick={() => setSelectedFinding(finding)} className="block w-full py-4 text-left first:pt-1 hover:bg-[#f8fafc]"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${severityStyles[finding.severity] ?? severityStyles.info}`}>{finding.severity}</span><span className="text-xs font-medium text-[#667085]">{finding.source}</span></div><p className="mt-2 font-medium text-[#172033]">{finding.message}</p><p className="mt-1 text-xs text-[#667085]">{finding.filePath ?? "Repository-level evidence"}{finding.lineStart ? `:${finding.lineStart}` : ""}{finding.code ? ` · ${finding.code}` : ""}</p></button>)}</div>}
-      {selectedFinding && <div className="border-t border-[#dfe4eb] pt-5" role="dialog" aria-label="Finding details"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1264d8]">Finding details</p><h3 className="mt-2 text-lg font-semibold text-[#172033]">{selectedFinding.message}</h3></div><button type="button" onClick={() => setSelectedFinding(null)} aria-label="Close finding details" className="rounded-lg p-2 text-[#667085] hover:bg-[#edf0f4]"><X size={18} /></button></div><dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-[#667085]">Severity</dt><dd className="mt-1 font-medium capitalize text-[#172033]">{selectedFinding.severity}</dd></div><div><dt className="text-xs text-[#667085]">Status</dt><dd className="mt-1 font-medium capitalize text-[#172033]">{selectedFinding.status}</dd></div><div><dt className="text-xs text-[#667085]">Source</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.source}</dd></div><div><dt className="text-xs text-[#667085]">Rule</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.code ?? "Not supplied"}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-[#667085]">Location</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.filePath ?? "Repository-level evidence"}{selectedFinding.lineStart ? `:${selectedFinding.lineStart}` : ""}</dd></div></dl><div className="mt-5 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void handleGeneratePatch()} disabled={patchLoading || Boolean(selectedFinding.diffContent) || !selectedFinding.repairFindingId} className="rounded-lg bg-[#1264d8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0b4da8] disabled:cursor-not-allowed disabled:opacity-50" title={!selectedFinding.repairFindingId ? "Bridge not ready" : undefined}>{patchLoading ? "Generating patch..." : selectedFinding.diffContent ? "Patch generated" : !selectedFinding.repairFindingId ? "Bridge pending" : "Generate patch"}</button>{selectedFinding.patchId && <button type="button" onClick={() => void handleRejectPatch()} disabled={rejectLoading || selectedFinding.status === "rejected"} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">{rejectLoading ? "Rejecting..." : selectedFinding.status === "rejected" ? "Patch rejected" : "Reject patch"}</button>}</div><div className="mt-5"><DiffViewer diff={selectedFinding.diffContent} /></div></div>}
+      {selectedFinding && <div className="border-t border-[#dfe4eb] pt-5" role="dialog" aria-label="Finding details"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1264d8]">Finding details</p><h3 className="mt-2 text-lg font-semibold text-[#172033]">{selectedFinding.message}</h3></div><button type="button" onClick={() => setSelectedFinding(null)} aria-label="Close finding details" className="rounded-lg p-2 text-[#667085] hover:bg-[#edf0f4]"><X size={18} /></button></div><dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-[#667085]">Severity</dt><dd className="mt-1 font-medium capitalize text-[#172033]">{selectedFinding.severity}</dd></div><div><dt className="text-xs text-[#667085]">Status</dt><dd className="mt-1 font-medium capitalize text-[#172033]">{selectedFinding.status}</dd></div><div><dt className="text-xs text-[#667085]">Source</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.source}</dd></div><div><dt className="text-xs text-[#667085]">Rule</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.code ?? "Not supplied"}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-[#667085]">Location</dt><dd className="mt-1 font-medium text-[#172033]">{selectedFinding.filePath ?? "Repository-level evidence"}{selectedFinding.lineStart ? `:${selectedFinding.lineStart}` : ""}</dd></div></dl><div className="mt-5 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void handleGeneratePatch()} disabled={patchLoading || Boolean(selectedFinding.patchId) || !selectedFinding.repairFindingId} className="rounded-lg bg-[#1264d8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0b4da8] disabled:cursor-not-allowed disabled:opacity-50" title={!selectedFinding.repairFindingId ? "Bridge not ready" : undefined}>{patchLoading ? "Generating patch..." : selectedFinding.patchId ? "Patch generated" : !selectedFinding.repairFindingId ? "Bridge pending" : "Generate patch"}</button>{selectedFinding.patchId ? (
+          <button type="button" onClick={() => void handleApprovePatch()} disabled={patchActionLoading || selectedFinding.status === "APPROVED"} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50" title={selectedFinding.status === "APPROVED" ? "Patch already approved" : "Approve patch before validation"}>
+            {patchActionLoading ? "Approving..." : selectedFinding.status === "APPROVED" ? "Approved" : "Approve patch"}
+          </button>
+        ) : null}{selectedFinding.patchId && <><button type="button" onClick={() => void handleValidatePatch()} disabled={patchActionLoading || selectedFinding.status !== "APPROVED" || selectedFinding.status === "VALIDATED" || selectedFinding.status === "REJECTED"} className="rounded-lg border border-[#bfd6f8] px-3 py-2 text-sm font-semibold text-[#1264d8] disabled:opacity-50">{patchActionLoading ? "Working…" : selectedFinding.status === "APPROVED" ? "Validate patch" : "Approve before validation"}</button><button type="button" onClick={() => void handleApplyPatch()} disabled={patchActionLoading || selectedFinding.status !== "VALIDATED"} className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 disabled:opacity-50">Apply to workspace</button><button type="button" onClick={() => void handleRejectPatch()} disabled={rejectLoading || ["REJECTED", "VALIDATED", "PATCH_APPLIED_IN_WORKSPACE"].includes(selectedFinding.status)} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">{rejectLoading ? "Rejecting…" : "Reject patch"}</button></>}</div>{patchActionError && <p role="alert" className="mt-3 text-sm text-red-700">{patchActionError}</p>}{selectedFinding.patchId && selectedFinding.status === "VALIDATED" && <form onSubmit={(event) => void handleCreatePullRequest(event)} className="mt-4 grid gap-2 rounded-lg bg-[#f8fafc] p-4 sm:grid-cols-2"><label className="text-xs font-medium text-[#344054]">GitHub token<input type="password" autoComplete="off" value={githubToken} onChange={(event) => setGithubToken(event.target.value)} className="mt-1 w-full rounded border border-[#dfe4eb] px-2 py-2" required /></label><label className="text-xs font-medium text-[#344054]">Pull request title<input value={pullRequestTitle} onChange={(event) => setPullRequestTitle(event.target.value)} maxLength={200} className="mt-1 w-full rounded border border-[#dfe4eb] px-2 py-2" required /></label><button type="submit" disabled={patchActionLoading} className="rounded-lg bg-[#1264d8] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Create GitHub pull request</button></form>}{pullRequestUrl && <p className="mt-3 text-sm text-emerald-700">Pull request created: <a className="underline" href={pullRequestUrl} target="_blank" rel="noreferrer">Open pull request</a></p>}<div className="mt-5"><DiffViewer diff={selectedFinding.diffContent} /></div></div>}
+      {patchActionMessage && <p role="status" className="text-sm text-emerald-700">{patchActionMessage}</p>}
     </section>
   );
 }

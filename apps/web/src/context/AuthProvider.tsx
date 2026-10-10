@@ -3,6 +3,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import axios from "axios";
 
 import * as authService from "../services/auth";
 import { AuthContext } from "./AuthContext";
@@ -32,8 +33,10 @@ export function AuthProvider({ children }: Props) {
       try {
         const response = await authService.getCurrentUser();
         setUser(response.data);
-      } catch {
-        localStorage.removeItem("token");
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          localStorage.removeItem("token");
+        }
         setUser(null);
       } finally {
         setLoading(false);

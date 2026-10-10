@@ -6,6 +6,7 @@ import { AnalysisOrchestrator, type AnalysisTool } from "./analysis.orchestrator
 import { AiAnalysisOrchestrator } from "../ai/agents/ai-analysis.orchestrator";
 import { AnalysisService } from "./analysis.service";
 import { DeterministicAnalysisService } from "./deterministic-analysis.service";
+import { ApiError } from "../../utils/ApiError";
 
 const activeRuns = new Set<string>();
 const workerId = crypto.randomUUID();
@@ -84,6 +85,18 @@ export class AnalysisQueue {
       try {
         await this.enqueue(run.project.ownerId, run.id);
       } catch (error) {
+        if (
+          error instanceof ApiError &&
+          error.statusCode === 409 &&
+          error.message.includes("workspace is missing")
+        ) {
+          await AnalysisService.fail(
+            run.project.ownerId,
+            run.id,
+            error.message,
+          );
+          continue;
+        }
         console.error(
           `[AnalysisQueue] unable to dispatch run ${run.id}:`,
           error,
@@ -95,6 +108,21 @@ export class AnalysisQueue {
   static async enqueue(ownerId: string, runId: string) {
     if (activeRuns.has(runId)) {
       return false;
+    }
+
+    const run = await prisma.analysisRun.findFirst({
+      where: { id: runId, project: { ownerId } },
+      include: { repository: true },
+    });
+
+    if (!run) {
+      throw new ApiError(404, "Analysis run not found or access denied.");
+    }
+    if (!run.repository.workspacePath) {
+      throw new ApiError(
+        409,
+        "This repository's workspace is missing or was not imported correctly — try re-importing it.",
+      );
     }
 
     const claimed = await prisma.analysisRun.updateMany({
@@ -115,15 +143,6 @@ export class AnalysisQueue {
 
     if (claimed.count !== 1) {
       return false;
-    }
-
-    const run = await prisma.analysisRun.findUnique({
-      where: { id: runId },
-      include: { repository: true },
-    });
-
-    if (!run?.repository.workspacePath) {
-      throw new Error("Analysis repository has no workspace.");
     }
 
     activeRuns.add(runId);

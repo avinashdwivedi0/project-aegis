@@ -1,9 +1,10 @@
 import crypto from "node:crypto";
 
-import type {
-  ToolAdapter,
-  ToolAdapterResult,
-  ToolEvidence,
+import {
+  createCompletionEvidence,
+  type ToolAdapter,
+  type ToolAdapterResult,
+  type ToolEvidence,
 } from "./tool-adapter.types";
 
 const SAMPLE_COUNT = 5;
@@ -103,7 +104,11 @@ export class PerformanceAdapter implements ToolAdapter {
           severity: "moderate",
           code: "P95_LATENCY",
         }]
-      : [];
+      : [createCompletionEvidence(
+          this.name,
+          this.version,
+          `Performance probe collected ${samples.length} successful samples; P95 latency was ${p95}ms.`,
+        )];
 
     return {
       tool: this.name,

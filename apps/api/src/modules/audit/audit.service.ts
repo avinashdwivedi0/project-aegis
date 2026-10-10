@@ -22,16 +22,19 @@ export class AuditLogService {
   }
 
   static async getAuditLogs(
+    ownerId: string,
     limit = 100,
     offset = 0,
     actorId?: string,
     targetType?: string,
-    targetId?: string
+    targetId?: string,
+    success?: boolean,
   ) {
-    const where: any = {};
-    if (actorId) where.actorId = actorId;
+    const where: any = { actorId: ownerId };
+    if (actorId && actorId !== ownerId) where.actorId = "__no_matching_actor__";
     if (targetType) where.targetType = targetType;
     if (targetId) where.targetId = targetId;
+    if (success !== undefined) where.success = success;
 
     const [logs, total] = await Promise.all([
       prisma.auditLog.findMany({

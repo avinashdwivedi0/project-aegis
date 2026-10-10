@@ -50,13 +50,10 @@ function CiIntegrationPage() {
       <AlertCircle className="text-orange-600 mt-0.5" size={20} />
       <div className="flex-1">
         <p className="text-sm font-medium text-orange-700">
-          ⚠️ Generated pipelines need an <code>AEGIS_API_TOKEN</code> secret, and Aegis
-          does not yet issue long-lived API tokens. These configs will not run
-          unattended until that is built.
+          ⚠️ Generated pipelines cannot authenticate yet: Aegis has no API-token issuance endpoint. A session JWT requires interactive login and cannot currently be provisioned to a CI runner.
         </p>
         <p className="text-xs text-orange-600 mt-1">
-          A valid token must be added as a GitHub Actions secret named
-          <code>AEGIS_API_TOKEN</code> in the repository settings.
+          Pipeline execution requires a token that Aegis cannot issue today.
         </p>
       </div>
     </div>
@@ -103,14 +100,9 @@ function CiIntegrationPage() {
 
   // Load repositories when project changes
   useEffect(() => {
-    if (!selectedProjectId) {
-      setRepositories([]);
-      return;
-    }
+    if (!selectedProjectId) return;
 
     let active = true;
-    setRepositoriesLoading(true);
-
     async function loadRepositories() {
       try {
         const response = await getRepositories(selectedProjectId);
@@ -222,7 +214,7 @@ function CiIntegrationPage() {
             <label className="block text-sm font-medium text-[#344054] mb-1">Project</label>
             <select
               value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
+              onChange={(e) => { setSelectedProjectId(e.target.value); setRepositoriesLoading(Boolean(e.target.value)); setRepositories([]); setSelectedRepositoryId(""); }}
               className="w-full rounded-lg border border-[#dfe4eb] bg-white px-3 py-2 text-sm text-[#344054]"
             >
               <option value="">Select a project</option>

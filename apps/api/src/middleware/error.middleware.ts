@@ -8,6 +8,20 @@ export function errorMiddleware(
   res: Response,
   next: NextFunction
 ) {
+  // express.json() forwards malformed JSON here before a route is reached.
+  // Treat it as a client error and avoid logging the parser's full stack/body.
+  if (
+    err !== null &&
+    typeof err === "object" &&
+    "type" in err &&
+    err.type === "entity.parse.failed"
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Request body must contain valid JSON",
+    });
+  }
+
   if (err instanceof ApiError) {
     return res.status(err.statusCode).json({
       success: false,

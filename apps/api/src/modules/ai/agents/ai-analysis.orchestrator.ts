@@ -24,7 +24,7 @@ const agentModel =
 
 export class AiAnalysisOrchestrator {
   private static readonly provider =
-    process.env.AGENT_MODE === "local"
+    process.env.AGENT_MODE?.trim() === "local"
       ? new LocalAgentProvider()
       : new GroqAgentProvider();
 
@@ -134,9 +134,17 @@ export class AiAnalysisOrchestrator {
         const output = await fn();
         await AnalysisEventService.record({
           analysisRunId,
-          type: "AGENT_COMPLETED",
+          type: output.status === "failed"
+            ? "AGENT_FAILED"
+            : output.status === "skipped"
+              ? "AGENT_SKIPPED"
+              : "AGENT_COMPLETED",
           agentRole: agentKey,
-          message: `${agentKey} agent completed successfully`,
+          message: output.status === "failed"
+            ? `${agentKey} agent failed: ${output.errorCode ?? output.summary}`
+            : output.status === "skipped"
+              ? `${agentKey} agent skipped: ${output.skippedReason ?? output.summary}`
+              : `${agentKey} agent completed successfully`,
           progress: 100,
         });
         await AiAnalysisOrchestrator.persistOutput(analysisRunId, output);

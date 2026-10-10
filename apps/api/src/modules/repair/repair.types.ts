@@ -39,10 +39,29 @@ export type PatchLifecycle =
   | "DETECTED"
   | "REVIEWED"
   | "PATCH_GENERATED"
+  | "APPROVED"
   | "PATCH_APPLIED_IN_WORKSPACE"
   | "TESTS_RERAN"
   | "VALIDATED"
   | "REJECTED";
+
+export function canTransitionPatchLifecycle(
+  current: string,
+  next: PatchLifecycle,
+): boolean {
+  const transitions: Record<string, Set<PatchLifecycle>> = {
+    DETECTED: new Set(["REVIEWED", "REJECTED"]),
+    REVIEWED: new Set(["PATCH_GENERATED", "REJECTED"]),
+    PATCH_GENERATED: new Set(["APPROVED", "REJECTED"]),
+    APPROVED: new Set(["TESTS_RERAN", "REJECTED"]),
+    TESTS_RERAN: new Set(["VALIDATED", "REJECTED"]),
+    PATCH_APPLIED_IN_WORKSPACE: new Set(["VALIDATED", "REJECTED"]),
+    VALIDATED: new Set(["PATCH_APPLIED_IN_WORKSPACE", "REJECTED"]),
+    REJECTED: new Set([]),
+  };
+
+  return transitions[current]?.has(next) ?? false;
+}
 
 /* ------------------------------------------------------------------ */
 /* Core interfaces                                                    */

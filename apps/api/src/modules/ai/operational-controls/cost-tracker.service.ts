@@ -93,7 +93,7 @@ export class CostTrackerService {
    * When in local mode, cost is always zero
    */
   static isLocalMode(): boolean {
-    return process.env.AGENT_MODE === "local";
+    return process.env.AGENT_MODE?.trim() === "local";
   }
 
   static async getUsageReport(

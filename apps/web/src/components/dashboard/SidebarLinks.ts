@@ -9,6 +9,7 @@ import {
   Settings,
   ShieldCheck,
   ShieldAlert,
+  TestTube2,
 } from "lucide-react";
 
 export const sidebarLinks = [
@@ -36,6 +37,11 @@ export const sidebarLinks = [
     title: "Testing",
     icon: FlaskConical,
     path: "/testing",
+  },
+  {
+    title: "Autonomous Testing",
+    icon: TestTube2,
+    path: "/autonomous-testing",
   },
   {
     title: "Reports",

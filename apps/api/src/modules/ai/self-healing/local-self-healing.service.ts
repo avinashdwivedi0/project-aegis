@@ -8,6 +8,7 @@ import { GroqAgentProvider } from "../agents/gemini.provider";
 import { resolvePromptPath } from "../prompt-path";
 
 import {
+  containsForbiddenXPathSelector,
   selfHealingInputSchema,
   selfHealingProposalSchema,
   type SelfHealingInput,
@@ -42,6 +43,83 @@ const LOCAL_HEALING_STRATEGIES = [
   },
 ] as const;
 
+type LocatorCandidate = {
+  strategy: "test-id-fallback" | "id-fallback" | "role-fallback" | "class-fallback";
+  locator: string;
+  confidence: number;
+};
+
+export function findUniqueCandidateLocators(domSnapshot: string): LocatorCandidate[] {
+  const elements = [...domSnapshot.matchAll(/<([a-z][\w:-]*)\b([^>]*)>/gi)].map((match) => {
+    const attributes = new Map<string, string>();
+    for (const attribute of match[2].matchAll(/([\w:-]+)\s*=\s*(["'])(.*?)\2/gs)) {
+      attributes.set(attribute[1].toLowerCase(), attribute[3]);
+    }
+    return attributes;
+  });
+  const candidates: LocatorCandidate[] = [];
+
+  function countMatches(predicate: (attributes: Map<string, string>) => boolean) {
+    return elements.filter(predicate).length;
+  }
+
+  for (const attributes of elements) {
+    const testId = attributes.get("data-testid");
+    if (testId && countMatches((candidate) => candidate.get("data-testid") === testId) === 1) {
+      candidates.push({
+        strategy: "test-id-fallback",
+        locator: `[data-testid=${JSON.stringify(testId)}]`,
+        confidence: 0.95,
+      });
+    }
+
+    const id = attributes.get("id");
+    if (id && countMatches((candidate) => candidate.get("id") === id) === 1) {
+      candidates.push({
+        strategy: "id-fallback",
+        locator: `[id=${JSON.stringify(id)}]`,
+        confidence: 0.9,
+      });
+    }
+
+    const role = attributes.get("role");
+    if (role && countMatches((candidate) => candidate.get("role") === role) === 1) {
+      candidates.push({
+        strategy: "role-fallback",
+        locator: `[role=${JSON.stringify(role)}]`,
+        confidence: 0.8,
+      });
+    }
+
+    const classes = [...new Set((attributes.get("class") ?? "").split(/\s+/).filter(Boolean))];
+    for (const tokenCount of [Math.min(classes.length, 2), 1]) {
+      if (tokenCount < 1) continue;
+      const tokens = classes.slice(0, tokenCount);
+      const locator = tokens.map((token) => `[class~=${JSON.stringify(token)}]`).join("");
+      const matches = countMatches((candidate) => {
+        const candidateClasses = new Set((candidate.get("class") ?? "").split(/\s+/));
+        return tokens.every((token) => candidateClasses.has(token));
+      });
+      if (matches === 1) {
+        candidates.push({
+          strategy: "class-fallback",
+          locator,
+          confidence: tokenCount > 1 ? 0.68 : 0.6,
+        });
+      }
+    }
+  }
+
+  const uniqueCandidates = new Map<string, LocatorCandidate>();
+  for (const candidate of candidates) {
+    const previous = uniqueCandidates.get(candidate.locator);
+    if (!previous || candidate.confidence > previous.confidence) {
+      uniqueCandidates.set(candidate.locator, candidate);
+    }
+  }
+  return [...uniqueCandidates.values()].sort((left, right) => right.confidence - left.confidence);
+}
+
 /**
  * LocalSelfHealingService produces locator proposals using deterministic
  * heuristics instead of an LLM call.
@@ -67,7 +145,7 @@ export class LocalSelfHealingService {
     }
 
     // LLM mode: use original prompt-based approach
-    if (process.env.AGENT_MODE !== "local") {
+    if (process.env.AGENT_MODE?.trim() !== "local") {
       return this.proposeWithLLM(validatedInput);
     }
 
@@ -130,7 +208,7 @@ export class LocalSelfHealingService {
     }
 
     const proposal = selfHealingProposalSchema.parse(parsed);
-    if (proposal.locator.includes("xpath") || proposal.locator.includes("//")) {
+    if (containsForbiddenXPathSelector(proposal.locator)) {
       throw new Error("Self-Healing Agent returned a prohibited XPath locator.");
     }
 
@@ -152,11 +230,7 @@ export class LocalSelfHealingService {
   }
 
   private async proposeLocal(input: SelfHealingInput) {
-    // Parse DOM snapshot to find candidate locators
-    const candidates = this.findCandidateLocators(
-      input.domSnapshot,
-      input.failedLocator,
-    );
+    const candidates = findUniqueCandidateLocators(input.domSnapshot);
 
     if (candidates.length === 0) {
       throw new Error(
@@ -166,8 +240,20 @@ export class LocalSelfHealingService {
 
     // Pick the best candidate (highest confidence heuristic)
     const best = candidates[0];
+    const strategy = best.strategy === "test-id-fallback"
+      ? "test-id"
+      : best.strategy === "role-fallback"
+        ? "role"
+        : "css";
+    const validatedProposal = selfHealingProposalSchema.parse({
+      contractVersion: "1.0",
+      strategy,
+      locator: best.locator,
+      confidence: best.confidence,
+      reasoning: `Local heuristic: tried ${candidates.length} strategy(ies). Selected ${best.strategy} with confidence ${best.confidence}.`,
+    });
 
-    return prisma.selfHealingProposal.create({
+    const saved = await prisma.selfHealingProposal.create({
       data: {
         repositoryId: input.repositoryId,
         testRunId: input.testRunId,
@@ -175,72 +261,16 @@ export class LocalSelfHealingService {
         failedLocator: input.failedLocator,
         domSnapshot: input.domSnapshot,
         screenshot: input.screenshot,
-        strategy: best.strategy,
-        proposedLocator: best.locator,
-        confidence: best.confidence,
-        reasoning: `Local heuristic: tried ${candidates.length} strategy(ies). Selected ${best.strategy} with confidence ${best.confidence}.`,
+        strategy: validatedProposal.strategy,
+        proposedLocator: validatedProposal.locator,
+        confidence: validatedProposal.confidence,
+        reasoning: validatedProposal.reasoning,
         status: "PENDING",
       },
     });
+    return { ...saved, contractVersion: validatedProposal.contractVersion, locator: validatedProposal.locator };
   }
 
-  private findCandidateLocators(
-    domSnapshot: string,
-    failedLocator: string,
-  ): Array<{ strategy: string; locator: string; confidence: number }> {
-    const candidates: Array<{
-      strategy: string;
-      locator: string;
-      confidence: number;
-    }> = [];
-
-    // Extract element info from DOM snapshot
-    const elementMatches = domSnapshot.matchAll(
-      /<(\w+)[^>]*data-testid="([^"]*)"[^>]*>/gi,
-    );
-    for (const match of elementMatches) {
-      candidates.push({
-        strategy: "id-fallback",
-        locator: `[data-testid="${match[2]}"]`,
-        confidence: 0.85,
-      });
-    }
-
-    // Try role-based
-    const roleMatches = domSnapshot.matchAll(
-      /role="([^"]*)"[^>]*>/gi,
-    );
-    for (const match of roleMatches) {
-      candidates.push({
-        strategy: "role-fallback",
-        locator: `[role="${match[1]}"]`,
-        confidence: 0.7,
-      });
-    }
-
-    // Try class-based fallback
-    const classMatches = domSnapshot.matchAll(
-      /class="([^"]*)"[^>]*>/gi,
-    );
-    for (const match of classMatches) {
-      const classes = match[1].split(/\s+/).filter(Boolean);
-      if (classes.length > 0) {
-        candidates.push({
-          strategy: "class-fallback",
-          locator: `.${classes[0]}`,
-          confidence: 0.6,
-        });
-      }
-    }
-
-    // Deduplicate
-    const seen = new Set<string>();
-    return candidates.filter((c) => {
-      if (seen.has(c.locator)) return false;
-      seen.add(c.locator);
-      return true;
-    });
-  }
 }
 
 export const localSelfHealingService = new LocalSelfHealingService();

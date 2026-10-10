@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
-import fs from "fs/promises";
-import path from "path";
+import fg from "fast-glob";
 
-import type {
-  ToolAdapter,
-  ToolAdapterResult,
-  ToolEvidence,
+import {
+  createCompletionEvidence,
+  type ToolAdapter,
+  type ToolAdapterResult,
+  type ToolEvidence,
 } from "./tool-adapter.types";
 
 const CONTRACT_FILES = [
@@ -22,15 +22,25 @@ export class ApiProbeAdapter implements ToolAdapter {
   readonly version = "fetch";
 
   async canRun(workspace: string) {
-    for (const file of CONTRACT_FILES) {
-      try {
-        await fs.access(path.join(workspace, file));
-        return true;
-      } catch {
-        // Continue checking supported API contract names.
-      }
-    }
-    return false;
+    const contracts = await fg(
+      CONTRACT_FILES.flatMap((file) => [file, `**/${file}`]),
+      {
+        cwd: workspace,
+        onlyFiles: true,
+        ignore: [
+          "**/.git/**",
+          "**/node_modules/**",
+          "**/vendor/**",
+          "**/dist/**",
+          "**/build/**",
+          "**/coverage/**",
+          "**/results/**",
+          "**/.venv/**",
+        ],
+        suppressErrors: true,
+      },
+    );
+    return contracts.length > 0;
   }
 
   async run(
@@ -76,7 +86,11 @@ export class ApiProbeAdapter implements ToolAdapter {
       });
       const body = await response.text();
       const evidence: ToolEvidence[] = response.ok
-        ? []
+        ? [createCompletionEvidence(
+            this.name,
+            this.version,
+            `API probe completed with HTTP ${response.status}.`,
+          )]
         : [{
             id: crypto.randomUUID(),
             tool: this.name,
@@ -89,7 +103,7 @@ export class ApiProbeAdapter implements ToolAdapter {
       return {
         tool: this.name,
         toolVersion: this.version,
-        status: "completed",
+        status: response.ok ? "completed" : "failed",
         command,
         execution: {
           command: "node",

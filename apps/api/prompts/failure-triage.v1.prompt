@@ -1,0 +1,24 @@
+You are an expert test failure triage engineer. Given a set of failure groups from test execution, your task is to classify each group into the appropriate category.
+
+FAILURE_GROUPS:
+{{FAILURE_GROUPS}}
+
+Based on the failure groups, classify each and provide reasoning in JSON format:
+{
+  "contractVersion": "1.0",
+  "groups": [
+    {
+      "groupId": "FAIL-GRP-001",
+      "classification": "real_bug|locator_change|flaky|environment_issue",
+      "reasoning": "Brief explanation of why this classification was chosen"
+    }
+  ]
+}
+
+Classification categories:
+- real_bug: Actual application defect that needs to be fixed
+- locator_change: Test failure due to changed selector, requires test update
+- flaky: Intermittent test failure, unreliable
+- environment_issue: Failure due to test environment setup, configuration, or external dependencies
+
+Only respond with valid JSON. Do not include any additional text.

@@ -7,9 +7,11 @@ import { PerformanceAdapter } from "./performance.adapter";
 import { SecurityScanAdapter } from "./security-scan.adapter";
 import { TestRunnerAdapter } from "./test-runner.adapter";
 import { TypeScriptAdapter } from "./typescript.adapter";
+import { PythonSyntaxAdapter } from "./python-syntax.adapter";
 
 const adapters: ToolAdapter[] = [
   new TypeScriptAdapter(),
+  new PythonSyntaxAdapter(),
   new EslintAdapter(),
   new DependencyAuditAdapter(),
   new SecurityScanAdapter(),

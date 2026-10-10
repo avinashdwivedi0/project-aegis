@@ -1,6 +1,7 @@
 import { prisma } from "../../config/prisma";
 import { generateToken } from "../../utils/jwt";
 import { hashPassword, verifyPassword } from "../../utils/password";
+import { ApiError } from "../../utils/ApiError";
 import type {
   AuthResponse,
   LoginInput,
@@ -18,7 +19,7 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new Error("Email already exists");
+      throw new ApiError(409, "Email already exists");
     }
 
     const passwordHash = await hashPassword(data.password);
@@ -58,7 +59,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error("Invalid email or password");
+      throw new ApiError(401, "Invalid email or password");
     }
 
     const isPasswordValid = await verifyPassword(
@@ -67,7 +68,7 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
-      throw new Error("Invalid email or password");
+      throw new ApiError(401, "Invalid email or password");
     }
 
     const token = generateToken({

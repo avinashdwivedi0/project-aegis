@@ -1,16 +1,18 @@
 import crypto from "node:crypto";
 
-import { prisma } from "../../../config/prisma";
-import { requirementAnalystService } from "../requirements/requirement-analyst.service";
-import { testDesignerService } from "../test-design/test-designer.service";
-import { scriptGeneratorService } from "../script-generation/script-generator.service";
-import { playwrightTestRunnerService } from "../test-runner/test-runner.service";
-import { localTestGeneratorService } from "./local-test-generator.service";
+import { prisma } from "../../../config/prisma.js";
+import { ApiError } from "../../../utils/ApiError.js";
+import { requirementAnalystService } from "../requirements/requirement-analyst.service.js";
+import { testDesignerService } from "../test-design/test-designer.service.js";
+import { scriptGeneratorService } from "../script-generation/script-generator.service.js";
+import { playwrightTestRunnerService } from "../test-runner/test-runner.service.js";
+import { localTestGeneratorService } from "./local-test-generator.service.js";
+import { AuditLogger } from "../../../utils/audit-logger.js";
 
 import {
   testWorkflowInputSchema,
   type TestWorkflowInput,
-} from "./test-workflow.types";
+} from "./test-workflow.types.js";
 
 export class TestWorkflowService {
   async run(ownerId: string, input: TestWorkflowInput) {
@@ -27,14 +29,18 @@ export class TestWorkflowService {
       },
     });
 
-    if (!repository?.workspacePath) {
-      throw new Error(
-        "Repository not found, access denied, or workspace is unavailable.",
+    if (!repository) {
+      throw new ApiError(404, "Repository not found or access denied.");
+    }
+    if (!repository.workspacePath) {
+      throw new ApiError(
+        409,
+        "This repository's workspace is missing or was not imported correctly — try re-importing it.",
       );
     }
 
     // Zero-cost local mode: use heuristic-based generation
-    if (process.env.AGENT_MODE === "local") {
+    if (process.env.AGENT_MODE?.trim() === "local") {
       const scenarios = await localTestGeneratorService.analyzeRequirement(
         validatedInput.requirement,
       );
@@ -50,7 +56,7 @@ export class TestWorkflowService {
       }
 
       const scripts = await localTestGeneratorService.generateScripts(
-        testCases.testCases,
+        testCases,
       );
 
       const runId = `workflow-${crypto.randomUUID()}`;
@@ -60,7 +66,22 @@ export class TestWorkflowService {
         workspace: repository.workspacePath,
         files: scripts.files,
         parallelism: validatedInput.parallelism,
-      });
+      }, ownerId);
+
+      await AuditLogger.record(
+        ownerId,
+        "TEST_WORKFLOW_APPROVED_RUN",
+        "TestWorkflow",
+        runId,
+        {
+          projectId: validatedInput.projectId,
+          repositoryId: validatedInput.repositoryId,
+          approved: validatedInput.approved,
+          requirementLength: validatedInput.requirement.length,
+          parallelism: validatedInput.parallelism,
+        },
+        true,
+      );
 
       return {
         runId,
@@ -104,7 +125,22 @@ export class TestWorkflowService {
       workspace: repository.workspacePath,
       files: scripts.files,
       parallelism: validatedInput.parallelism,
-    });
+    }, ownerId);
+
+    await AuditLogger.record(
+      ownerId,
+      "TEST_WORKFLOW_APPROVED_RUN",
+      "TestWorkflow",
+      runId,
+      {
+        projectId: validatedInput.projectId,
+        repositoryId: validatedInput.repositoryId,
+        approved: validatedInput.approved,
+        requirementLength: validatedInput.requirement.length,
+        parallelism: validatedInput.parallelism,
+      },
+      true,
+    );
 
     return {
       runId,

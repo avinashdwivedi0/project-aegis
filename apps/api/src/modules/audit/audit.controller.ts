@@ -20,14 +20,17 @@ export class AuditController {
         actorId,
         targetType,
         targetId,
+        success,
       } = req.query;
 
       const { logs, total } = await AuditLogService.getAuditLogs(
+        req.user.userId,
         parseInt(limit as string, 10),
         parseInt(offset as string, 10),
         actorId as string,
         targetType as string,
         targetId as string,
+        success === "true" ? true : success === "false" ? false : undefined,
       );
 
       return successResponse(res, "Audit logs retrieved.", { logs, total });

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 
 import {
@@ -18,6 +19,7 @@ import { useProjects } from "@/hooks/useProjects";
 import type { Project } from "@/types/project";
 
 function ProjectsPage() {
+  const [searchParams] = useSearchParams();
   const {
     projects,
     loading,
@@ -25,7 +27,7 @@ function ProjectsPage() {
   } = useProjects();
 
   const [search, setSearch] =
-    useState("");
+    useState(searchParams.get("search") ?? "");
 
   const [status, setStatus] =
     useState("ALL");

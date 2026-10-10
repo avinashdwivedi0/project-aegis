@@ -42,6 +42,22 @@ export class RepairController {
     }
   }
 
+  static async approve(
+    req: AuthenticatedRequest<PatchParams>,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const result = await RepairService.approvePatch(
+        req.params.patchId,
+        req.user.userId,
+      );
+      return successResponse(res, "Patch approved.", result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async validate(
     req: AuthenticatedRequest<PatchParams>,
     res: Response,

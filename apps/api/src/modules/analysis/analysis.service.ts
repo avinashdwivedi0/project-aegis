@@ -70,11 +70,18 @@ export class AnalysisService {
     input: CreateAnalysisInput,
   ) {
     const adapters = input.adapters ?? [];
-    await this.findRepository(
+    const repository = await this.findRepository(
       ownerId,
       input.projectId,
       input.repositoryId,
     );
+
+    if (!repository.workspacePath) {
+      throw new ApiError(
+        409,
+        "This repository's workspace is missing or was not imported correctly — try re-importing it.",
+      );
+    }
 
     const run = await prisma.analysisRun.create({
       data: {
@@ -349,9 +356,10 @@ export class AnalysisService {
         command: true,
         status: true,
         evidence: true,
+        stderr: true,
       },
     });
-    const byTool: Record<string, { status: string; evidence: number }> = {};
+    const byTool: Record<string, { status: string; evidence: number; reason: string | null }> = {};
     const bySeverity: Record<string, number> = {};
     let evidenceCount = 0;
 
@@ -362,6 +370,9 @@ export class AnalysisService {
       byTool[execution.command] = {
         status: execution.status,
         evidence: evidence.length,
+        reason: execution.status.toUpperCase() === "COMPLETED"
+          ? null
+          : execution.stderr || null,
       };
       evidenceCount += evidence.length;
 

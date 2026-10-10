@@ -7,6 +7,367 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model GuardrailSettings {
+  id                               String         @id @default(cuid())
+  projectId                        String         @unique
+  maxPatchRiskScore                Int            @default(75)
+  requireManualApprovalForCritical Boolean        @default(false)
+  sandboxOnly                      Boolean        @default(false)
+  scope                            GuardrailScope @default(ADVISORY)
+  createdAt                        DateTime       @default(now())
+  updatedAt                        DateTime       @default(now()) @updatedAt
+
+  @@index([projectId])
+  @@map("guardrail_settings")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  passwordHash String
+  role         Role      @default(USER)
+  preferences  Json      @default("{}")
+  projects     Project[]
+}
+
+model Project {
+  id           String            @id @default(cuid())
+  name         String
+  description  String?
+  status       ProjectStatus     @default(ACTIVE)
+  visibility   ProjectVisibility @default(PRIVATE)
+  ownerId      String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  owner        User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  repairJobs   RepairJob[]
+  analyses     AnalysisRun[]
+  repositories Repository[]
+
+  @@index([ownerId])
+}
+
+model Repository {
+  id                   String                @id @default(cuid())
+  name                 String
+  description          String?
+  provider             RepositoryProvider    @default(LOCAL)
+  status               RepositoryStatus      @default(ACTIVE)
+  url                  String?
+  defaultBranch        String?
+  isPrivate            Boolean               @default(false)
+  projectId            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  workspacePath        String?
+  repairJobs           RepairJob[]
+  analyses             AnalysisRun[]
+  project              Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  embeddings           RepositoryEmbedding[]
+  files                RepositoryFile[]
+  selfHealingProposals SelfHealingProposal[]
+  autonomousTestRuns   AutonomousTestRun[]
+
+  @@index([projectId])
+  @@index([provider])
+  @@index([status])
+  @@index([workspacePath])
+  @@map("repositories")
+}
+
+model SelfHealingProposal {
+  id              String     @id @default(cuid())
+  repositoryId    String
+  testRunId       String
+  testCaseId      String
+  failedLocator   String
+  domSnapshot     String
+  screenshot      String
+  strategy        String
+  proposedLocator String
+  confidence      Float
+  reasoning       String
+  status          String     @default("PENDING")
+  retryCount      Int        @default(0)
+  parentProposalId String?
+  createdAt       DateTime   @default(now())
+  reviewedAt      DateTime?
+  repository      Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  parentProposal  SelfHealingProposal? @relation("SelfHealingRetries", fields: [parentProposalId], references: [id], onDelete: SetNull)
+  retryProposals  SelfHealingProposal[] @relation("SelfHealingRetries")
+
+  @@index([repositoryId, status])
+  @@index([testRunId])
+  @@index([parentProposalId])
+  @@map("self_healing_proposals")
+}
+
+model AutonomousTestRun {
+  id           String     @id @default(cuid())
+  repositoryId String
+  runId        String     @unique
+  kind         String
+  suite        String?
+  mode         String?
+  status       String
+  result       Json
+  createdAt    DateTime   @default(now())
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, createdAt])
+  @@map("autonomous_test_runs")
+}
+
+model RepositoryFile {
+  id           String                @id @default(cuid())
+  repositoryId String
+  name         String
+  path         String
+  type         String
+  parentPath   String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  content      String?
+  embeddings   RepositoryEmbedding[]
+  repository   Repository            @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId])
+  @@index([path])
+  @@index([parentPath])
+  @@map("repository_files")
+}
+
+model RepositoryEmbedding {
+  id               String                @id @default(cuid())
+  repositoryId     String
+  repositoryFileId String?
+  filePath         String
+  chunkIndex       Int
+  content          String
+  embedding        Unsupported("vector")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  repositoryFile   RepositoryFile?       @relation(fields: [repositoryFileId], references: [id], onDelete: Cascade)
+  repository       Repository            @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId])
+  @@index([repositoryFileId])
+  @@index([filePath])
+  @@index([embedding])
+  @@map("repository_embeddings")
+}
+
+model AnalysisRun {
+  id              String             @id @default(cuid())
+  projectId       String
+  repositoryId    String
+  ref             String             @default("HEAD")
+  status          AnalysisStatus     @default(PENDING)
+  progress        Int                @default(0)
+  totalStages     Int                @default(0)
+  completedStages Int                @default(0)
+  currentStage    String?
+  error           String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  tools           Json               @default("[]")
+  leaseOwner      String?
+  leaseExpiresAt  DateTime?
+  bridgeStatus    RepairBridgeStatus @default(PENDING)
+  bridgeError     String?
+  metadata        Json               @default("{}")
+  events          AnalysisEvent[]
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  repository      Repository         @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  costLogs        CostLog[]
+  toolExecutions  ToolExecution[]
+
+  @@index([projectId])
+  @@index([repositoryId])
+  @@index([status])
+  @@index([leaseExpiresAt])
+  @@map("analysis_runs")
+}
+
+model CostLog {
+  id               String      @id @default(cuid())
+  analysisRunId    String
+  model            String?
+  agentId          String?
+  promptTokens     Int         @default(0)
+  completionTokens Int         @default(0)
+  totalCost        Float       @default(0)
+  currency         String      @default("USD")
+  createdAt        DateTime    @default(now())
+  analysisRun      AnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([analysisRunId])
+  @@index([createdAt])
+  @@map("cost_log")
+}
+
+model ToolExecution {
+  id            String      @id @default(cuid())
+  analysisRunId String
+  command       String
+  args          Json
+  status        String
+  exitCode      Int?
+  stdout        String      @default("")
+  stderr        String      @default("")
+  durationMs    Int         @default(0)
+  createdAt     DateTime    @default(now())
+  evidence      Json        @default("[]")
+  analysisRun   AnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+
+  @@index([analysisRunId])
+  @@index([status])
+  @@map("tool_executions")
+}
+
+model AnalysisEvent {
+  id            String      @id @default(cuid())
+  analysisRunId String
+  type          String
+  stage         String?
+  message       String?
+  progress      Int?
+  createdAt     DateTime    @default(now())
+  agentRole     String?     @db.VarChar(20)
+  analysisRun   AnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+
+  @@index([analysisRunId, createdAt])
+  @@index([type])
+  @@index([agentRole])
+  @@map("analysis_events")
+}
+
+model RepairJob {
+  id            String          @id @default(cuid())
+  projectId     String
+  repositoryId  String
+  ref           String          @default("HEAD")
+  status        RepairJobStatus @default(PENDING)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  analysisRunId String?
+  findings      Finding[]
+  patches       Patch[]
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  repository    Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([repositoryId])
+  @@index([status])
+}
+
+model Finding {
+  id                           String          @id @default(cuid())
+  repairJobId                  String
+  category                     String
+  severity                     FindingSeverity
+  confidence                   Float
+  title                        String
+  description                  String
+  evidence                     Json            @default("[]")
+  filePath                     String
+  startLine                    Int?
+  endLine                      Int?
+  detectionSource              String
+  recommendedFix               String?
+  status                       FindingStatus   @default(OPEN)
+  patchId                      String?         @unique
+  createdAt                    DateTime        @default(now())
+  updatedAt                    DateTime        @updatedAt
+  sourceFindingKey             String?
+  analysisRunId                String?
+  Patch_Finding_patchIdToPatch Patch?          @relation("Finding_patchIdToPatch", fields: [patchId], references: [id])
+  repairJob                    RepairJob       @relation(fields: [repairJobId], references: [id], onDelete: Cascade)
+  patch                        Patch?
+
+  @@index([repairJobId])
+  @@index([status])
+  @@index([severity])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json     @default("{}")
+  success    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+model Patch {
+  id                             String             @id @default(cuid())
+  findingId                      String             @unique
+  repairJobId                    String
+  diffContent                    String
+  diffHash                       String
+  patchBytes                     Int
+  linesAdded                     Int
+  linesRemoved                   Int
+  riskScore                      Float
+  target                         String
+  lifecycle                      PatchLifecycle     @default(PATCH_GENERATED)
+  createdAt                      DateTime           @default(now())
+  updatedAt                      DateTime           @updatedAt
+  appliedAt                      DateTime?
+  validatedAt                    DateTime?
+  Finding_Finding_patchIdToPatch Finding?           @relation("Finding_patchIdToPatch")
+  finding                        Finding            @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  repairJob                      RepairJob          @relation(fields: [repairJobId], references: [id], onDelete: Cascade)
+  applications                   PatchApplication[]
+  validations                    Validation[]
+
+  @@index([repairJobId])
+  @@index([lifecycle])
+}
+
+model Validation {
+  id                 String   @id @default(cuid())
+  patchId            String
+  status             String
+  testsRun           Int      @default(0)
+  testsPassed        Int      @default(0)
+  testsFailed        Int      @default(0)
+  lintPassed         Boolean  @default(false)
+  typeCheckPassed    Boolean  @default(false)
+  securityScanPassed Boolean  @default(false)
+  failures           Json     @default("[]")
+  durationMs         Int      @default(0)
+  createdAt          DateTime @default(now())
+  patch              Patch    @relation(fields: [patchId], references: [id], onDelete: Cascade)
+
+  @@index([patchId])
+}
+
+model PatchApplication {
+  id        String   @id @default(cuid())
+  patchId   String
+  target    String
+  success   Boolean
+  output    String?
+  error     String?
+  createdAt DateTime @default(now())
+  patch     Patch    @relation(fields: [patchId], references: [id], onDelete: Cascade)
+
+  @@index([patchId])
+}
+
 enum Role {
   USER
   ADMIN
@@ -14,7 +375,7 @@ enum Role {
 
 enum ProjectStatus {
   ACTIVE
- ARCHIVED
+  ARCHIVED
   COMPLETED
 }
 
@@ -79,6 +440,7 @@ enum PatchLifecycle {
   DETECTED
   REVIEWED
   PATCH_GENERATED
+  APPROVED
   PATCH_APPLIED_IN_WORKSPACE
   TESTS_RERAN
   VALIDATED
@@ -90,377 +452,8 @@ enum GuardrailScope {
   ENFORCED
 }
 
-model GuardrailSettings {
-  id                String           @id @default(cuid())
-  projectId         String
-  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  maxPatchRiskScore Int              @default(75)
-  requireManualApprovalForCritical Boolean @default(false)
-  sandboxOnly       Boolean          @default(false)
-  scope             GuardrailScope   @default(ADVISORY) // ADVISORY = UI-only, not enforced server-side; ENFORCED = actual checks apply
-
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-
-  @@unique([projectId])
-  @@map("guardrail_settings")
-}
-
-model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(USER)
-  preferences  Json     @default("{}")
-
-  // Relations
-  projects     Project[]
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-model Project {
-  id           String            @id @default(cuid())
-
-  name         String
-  description  String?
-
-  status       ProjectStatus     @default(ACTIVE)
-  visibility   ProjectVisibility @default(PRIVATE)
-
-  ownerId      String
-  owner        User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-
-  repositories Repository[]
-  analyses    AnalysisRun[]
-  repairJobs  RepairJob[]
-  guardrailSettings GuardrailSettings?
-
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-
-  @@index([ownerId])
-}
-
-model Repository {
-  id              String               @id @default(cuid())
-
-  name            String
-  description     String?
-
-  provider        RepositoryProvider   @default(LOCAL)
-  status          RepositoryStatus     @default(ACTIVE)
-
-  // Remote repository URL (GitHub, GitLab, etc.)
-  url             String?
-
-  // Local indexed repository location
-  workspacePath   String?
-
-  defaultBranch   String?
-  isPrivate       Boolean              @default(false)
-
-  projectId       String
-  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  files           RepositoryFile[]
-  embeddings      RepositoryEmbedding[]
-  selfHealingProposals SelfHealingProposal[]
-  analyses        AnalysisRun[]
-  repairJobs      RepairJob[]
-
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-
-  @@index([projectId])
-  @@index([provider])
-  @@index([status])
-  @@index([workspacePath])
-
-  @@map("repositories")
-}
-
-model SelfHealingProposal {
-  id               String   @id @default(cuid())
-  repositoryId     String
-  testRunId        String
-  testCaseId       String
-  failedLocator    String
-  domSnapshot      String
-  screenshot       String
-  strategy         String
-  proposedLocator  String
-  confidence       Float
-  reasoning        String
-  status           String   @default("PENDING")
-  createdAt        DateTime @default(now())
-  reviewedAt       DateTime?
-
-  repository       Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-
-  @@index([repositoryId, status])
-  @@index([testRunId])
-  @@map("self_healing_proposals")
-}
-
-model RepositoryFile {
-  id            String      @id @default(cuid())
-
-  repositoryId  String
-  repository    Repository  @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-
-  name          String
-  path          String
-  type          String
-
-  parentPath    String?
-  content       String?
-
-  embeddings    RepositoryEmbedding[]
-
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  @@index([repositoryId])
-  @@index([path])
-  @@index([parentPath])
-
-  @@map("repository_files")
-}
-
-model RepositoryEmbedding {
-  id               String @id @default(cuid())
-
-  repositoryId     String
-  repository       Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-
-  repositoryFileId String?
-  repositoryFile   RepositoryFile? @relation(fields: [repositoryFileId], references: [id], onDelete: Cascade)
-
-  filePath         String
-
-  chunkIndex       Int
-  content          String
-
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([repositoryId])
-  @@index([repositoryFileId])
-  @@index([filePath])
-
-  @@map("repository_embeddings")
-}
-
-model AnalysisRun {
-  id                String            @id @default(cuid())
-  projectId         String
-  repositoryId      String
-  ref               String            @default("HEAD")
-  status            AnalysisStatus    @default(PENDING)
-  progress          Int               @default(0)
-  totalStages       Int               @default(0)
-  completedStages   Int               @default(0)
-  tools             Json              @default("[]")
-  leaseOwner        String?
-  leaseExpiresAt    DateTime?
-  currentStage      String?
-  error             String?
-  startedAt         DateTime?
-  completedAt       DateTime?
-  bridgeStatus      RepairBridgeStatus @default(PENDING)
-  bridgeError       String?
-  metadata          Json             @default("{}")
-
-  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  costLogs          CostLog[]
-  repository        Repository        @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  toolExecutions    ToolExecution[]
-  events            AnalysisEvent[]
-
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-
-  @@index([projectId])
-  @@index([repositoryId])
-  @@index([status])
-  @@map("analysis_runs")
-}
-
-model CostLog {
-  id               String   @id @default(cuid())
-  analysisRunId    String
-  analysisRun      AnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
-  model            String?    // e.g., "groq", "openai"
-  agentId          String?
-  promptTokens     Int       @default(0)
-  completionTokens Int       @default(0)
-  totalCost        Float     @default(0)
-  currency         String    @default("USD")
-  createdAt        DateTime  @default(now())
-
-  @@index([analysisRunId])
-  @@index([createdAt])
-  @@map("cost_log")
-}
-
-model ToolExecution {
-  id           String         @id @default(cuid())
-  analysisRunId String
-  command      String
-  args         Json
-  status       String
-  exitCode     Int?
-  stdout       String         @default("")
-  stderr       String         @default("")
-  durationMs   Int            @default(0)
-  evidence     Json           @default("[]")
-  createdAt    DateTime       @default(now())
-
-  analysisRun  AnalysisRun    @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
-
-  @@index([analysisRunId])
-  @@index([status])
-  @@map("tool_executions")
-}
-
-model AnalysisEvent {
-  id           String      @id @default(cuid())
-  analysisRunId String
-  type         String
-  stage        String?
-  message      String?
-  progress     Int?
-  agentRole    String?
-  createdAt    DateTime    @default(now())
-
-  analysisRun  AnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
-
-  @@index([analysisRunId, createdAt])
-  @@index([type])
-  @@index([agentRole])
-  @@map("analysis_events")
-}
-
-model RepairJob {
-  id            String         @id @default(cuid())
-  analysisRunId String?        // Links back to the analysis run that created this job
-  projectId     String
-  repositoryId  String
-  ref           String         @default("HEAD")
-  status        RepairJobStatus @default(PENDING)
-  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  repository    Repository     @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  findings      Finding[]
-  patches       Patch[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  @@index([projectId])
-  @@index([repositoryId])
-  @@index([analysisRunId])
-  @@index([status])
-}
-
-model Finding {
-  id                  String          @id @default(cuid())
-  repairJobId         String
-  category            String
-  severity            FindingSeverity
-  confidence          Float
-  title               String
-  description         String
-  evidence            Json            @default("[]")
-  filePath            String
-  startLine           Int?
-  endLine             Int?
-  detectionSource     String
-  recommendedFix      String?
-  status              FindingStatus   @default(OPEN)
-  patchId             String?         @unique
-  repairJob           RepairJob       @relation(fields: [repairJobId], references: [id], onDelete: Cascade)
-  patch               Patch?
-  sourceFindingKey    String?         // Synthetic ID from FindingService.list() — maps analysis→repair domain
-  analysisRunId       String?         // FK → AnalysisRun that seeded this repair job
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-
-  @@index([repairJobId])
-  @@index([status])
-  @@index([severity])
-}
-
-model AuditLog {
-  id            String   @id @default(cuid())
-  actorId       String   // Authenticated user ID (from session)
-  action        String   // e.g., "BRIDGE_CREATE", "PATCH_GENERATE", "PATCH_REJECT"
-  targetType    String   // e.g., "AnalysisRun", "Finding", "Patch"
-  targetId      String   // ID of the target entity
-  metadata      Json     @default("{}") // Additional context (error, counts, etc.)
-  success       Boolean  // Whether the action succeeded
-  createdAt     DateTime @default(now())
-
-  @@index([actorId])
-  @@index([targetType, targetId])
-  @@index([createdAt])
-  @@map("audit_log")
-}
-
-model Patch {
-  id             String         @id @default(cuid())
-  findingId      String         @unique
-  repairJobId    String
-  diffContent    String
-  diffHash       String
-  patchBytes     Int
-  linesAdded     Int
-  linesRemoved   Int
-  riskScore      Float
-  target         String
-  lifecycle      PatchLifecycle @default(PATCH_GENERATED)
-  finding        Finding        @relation(fields: [findingId], references: [id], onDelete: Cascade)
-  repairJob      RepairJob      @relation(fields: [repairJobId], references: [id], onDelete: Cascade)
-  validations    Validation[]
-  applications   PatchApplication[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  appliedAt      DateTime?
-  validatedAt    DateTime?
-
-  @@index([repairJobId])
-  @@index([lifecycle])
-}
-
-model Validation {
-  id                 String   @id @default(cuid())
-  patchId            String
-  status             String
-  testsRun           Int      @default(0)
-  testsPassed        Int      @default(0)
-  testsFailed        Int      @default(0)
-  lintPassed         Boolean  @default(false)
-  typeCheckPassed    Boolean  @default(false)
-  securityScanPassed Boolean  @default(false)
-  failures           Json     @default("[]")
-  durationMs         Int      @default(0)
-  patch              Patch    @relation(fields: [patchId], references: [id], onDelete: Cascade)
-  createdAt          DateTime @default(now())
-
-  @@index([patchId])
-}
-
-model PatchApplication {
-  id        String   @id @default(cuid())
-  patchId   String
-  target    String
-  success   Boolean
-  output    String?
-  error     String?
-  patch     Patch    @relation(fields: [patchId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@index([patchId])
+enum Currency {
+  USD
+  EUR
+  GBP
 }

@@ -21,6 +21,7 @@ export async function runGeneratedTestWorkflow(input: {
   repositoryId: string;
   requirement: string;
   parallelism?: number;
+  approved?: boolean;
 }) {
   const response = await api.post<{
     data: GeneratedTestWorkflowResult;

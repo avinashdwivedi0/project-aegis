@@ -8,6 +8,7 @@ DOM SNAPSHOT:
 
 Based on the DOM structure and the failed locator, provide a JSON response with:
 {
+  "contractVersion": "1.0",
   "strategy": "role|test-id|text|css",
   "locator": "string",
   "confidence": number between 0 and 1,

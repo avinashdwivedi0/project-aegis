@@ -17,6 +17,11 @@ router.get(
   RepairController.get,
 );
 router.post(
+  "/patches/:patchId/approve",
+  authenticate,
+  RepairController.approve,
+);
+router.post(
   "/patches/:patchId/validate",
   authenticate,
   RepairController.validate,

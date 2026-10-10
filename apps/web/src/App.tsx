@@ -25,6 +25,7 @@ import SelfHealingPage from "./pages/SelfHealingPage";
 import MemoryPage from "./pages/MemoryPage";
 import AuditLogPage from "./pages/AuditLogPage";
 import CiIntegrationPage from "./pages/CiIntegrationPage";
+import AutonomousTestingPage from "./pages/AutonomousTestingPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 
@@ -112,6 +113,11 @@ function App() {
               element={
                 <TestingPage />
               }
+            />
+
+            <Route
+              path="/autonomous-testing"
+              element={<AutonomousTestingPage />}
             />
 
             <Route

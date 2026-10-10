@@ -9,7 +9,14 @@ export const testRunnerInputSchema = z.object({
   files: z.array(generatedPlaywrightFileSchema).min(1),
   parallelism: z.number().int().min(1).max(16).default(2),
   timeoutMs: z.number().int().positive().max(900_000).default(180_000),
+  compatibility: z.object({
+    browsers: z.array(z.enum(["chromium", "firefox", "webkit"])).min(1),
+    viewports: z.array(z.enum(["desktop", "mobile"])).min(1),
+  }).optional(),
 });
+
+// Clients select an owned repository; the API supplies its workspace path.
+export const testRunnerRequestSchema = testRunnerInputSchema.omit({ workspace: true });
 
 export const testResultSchema = z.object({
   title: z.string(),

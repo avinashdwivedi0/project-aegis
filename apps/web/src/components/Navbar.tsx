@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "./ui/button";
 
 function Navbar() {
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <header className="sticky top-0 z-50 border-b border-[#dfe4eb] bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
@@ -55,14 +57,25 @@ function Navbar() {
           </Button>
         </nav>
 
-        {/* Mobile Button (placeholder) */}
         <Button
           variant="outline"
           className="md:hidden"
+          type="button"
+          aria-expanded={menuOpen}
+          aria-controls="mobile-public-navigation"
+          onClick={() => setMenuOpen((open) => !open)}
         >
-          Menu
+          {menuOpen ? "Close" : "Menu"}
         </Button>
       </div>
+      {menuOpen && <nav id="mobile-public-navigation" className="grid gap-3 border-t border-[#dfe4eb] bg-white px-6 py-4 md:hidden">
+        <Link onClick={() => setMenuOpen(false)} to="/" className="py-2 text-sm font-medium text-[#344054]">Home</Link>
+        <a onClick={() => setMenuOpen(false)} href="/#features" className="py-2 text-sm font-medium text-[#344054]">Features</a>
+        <a onClick={() => setMenuOpen(false)} href="/#how-it-works" className="py-2 text-sm font-medium text-[#344054]">How It Works</a>
+        <a onClick={() => setMenuOpen(false)} href="/#tech-stack" className="py-2 text-sm font-medium text-[#344054]">Tech Stack</a>
+        <Link onClick={() => setMenuOpen(false)} to="/login" className="py-2 text-sm font-medium text-[#344054]">Login</Link>
+        <Link onClick={() => setMenuOpen(false)} to="/register" className="py-2 text-sm font-semibold text-[#1264d8]">Get Started</Link>
+      </nav>}
     </header>
   );
 }
