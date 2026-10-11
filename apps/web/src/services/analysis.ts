@@ -38,8 +38,8 @@ export type AnalysisRun = {
 
 export type AnalysisRunSummaryDetail = {
   runId: string;
-  tools: Record<string, { status: string; evidence: number; reason: string | null }>;
-  totals: { executions: number; evidence: number };
+  tools: Record<string, { status: string; evidence: number; findings: number; projectsScanned: number; reason: string | null; output: string }>;
+  totals: { executions: number; evidence: number; findings: number; skipped: number; failed: number };
   bySeverity: Record<string, number>;
 };
 

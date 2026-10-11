@@ -73,19 +73,23 @@ export class TestRunnerAdapter implements ToolAdapter {
         ));
       } else {
         const output = `${execution.stdout}\n${execution.stderr}`.trim();
-        evidence.push({
-          id: crypto.randomUUID(),
-          tool: this.name,
-          toolVersion: this.version,
-          status: "failed",
-          message: `${packageName}: ${output || "Test command failed without output."}`,
-          code: `exit:${execution.exitCode ?? "unknown"}`,
-        });
+        if (!this.hasAssertionFailures(output)) {
+          evidence.push({
+            id: crypto.randomUUID(),
+            tool: this.name,
+            toolVersion: this.version,
+            status: "failed",
+            message: `${packageName}: ${output || "Test command failed without output."}`,
+            code: `exit:${execution.exitCode ?? "unknown"}`,
+          });
+        }
       }
       if (signal?.aborted) break;
     }
 
     const failedExecution = executions.find(({ status }) => status !== "COMPLETED");
+    const assertionFailure = executions.some(({ status, stdout, stderr }) => status !== "COMPLETED" && this.hasAssertionFailures(`${stdout}\n${stderr}`));
+    const toolFailure = executions.some(({ status, stdout, stderr }) => status !== "COMPLETED" && !this.hasAssertionFailures(`${stdout}\n${stderr}`));
     const packageNames = executions.map(({ directory }) => directory || "root");
     const command: string[] = ["test", ...packageNames];
     const execution = {
@@ -101,9 +105,12 @@ export class TestRunnerAdapter implements ToolAdapter {
     return {
       tool: this.name,
       toolVersion: this.version,
-      status: failedExecution === undefined
+      status: toolFailure
         ? "completed"
-        : "failed",
+        : "completed",
+      checkStatus: toolFailure ? "FAILED" : assertionFailure ? "FINDINGS" : "PASSED",
+      projectsScanned: executions.length,
+      failureReason: toolFailure ? execution.stderr || execution.stdout || "Test runner failed without diagnostic output." : undefined,
       command,
       execution,
       evidence,
@@ -185,5 +192,12 @@ export class TestRunnerAdapter implements ToolAdapter {
       }
     }
     return "pnpm";
+  }
+
+  private hasAssertionFailures(output: string): boolean {
+    return /#\s*fail\s+[1-9]\d*/i.test(output)
+      || /\btests?:\s*\d+\s+failed\b/i.test(output)
+      || /^FAIL\s+/m.test(output)
+      || /\bassertionerror\b|\bexpect\([^\n]+\)\.to(?:Be|Equal|Have)/i.test(output);
   }
 }

@@ -6,12 +6,14 @@ import {
   getAnalysisRun,
   getAnalysisSummary,
   getMergeGate,
+  getFindings,
   cancelAnalysis,
   retryAnalysis,
   type AnalysisEvent,
   type AnalysisRun,
   type AnalysisRunSummaryDetail,
   type MergeGateResult,
+  type Finding,
 } from "@/services/analysis";
 
 const terminalStates = new Set(["COMPLETED", "FAILED", "CANCELLED"]);
@@ -101,6 +103,7 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
   const [retrying, setRetrying] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [summary, setSummary] = useState<AnalysisRunSummaryDetail | null>(null);
+  const [checkFindings, setCheckFindings] = useState<Finding[]>([]);
   const [gate, setGate] = useState<MergeGateResult | null>(null);
   const [actionError, setActionError] = useState("");
   const [cancelling, setCancelling] = useState(false);
@@ -126,6 +129,8 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
         if (!active) return;
         if (summaryResult.status === "fulfilled") setSummary(summaryResult.value);
         if (gateResult.status === "fulfilled") setGate(gateResult.value);
+        const findingsResult = await getFindings(runId, {});
+        if (active) setCheckFindings(findingsResult);
         if (pollingEnabled && !terminalStates.has(nextRun.status)) {
           timer = window.setTimeout(load, 2000);
         }
@@ -145,6 +150,21 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
   if (!run) return <section className="flex items-center gap-2 rounded-xl border border-[#dfe4eb] bg-white p-5 text-sm text-[#667085]"><Loader2 size={17} className="animate-spin" /> Loading analysis progress...</section>;
 
   const agentStatuses = deriveAgentStatuses(events);
+  const checkToAgent: Record<string, AgentKey> = {
+    typescript: "codeQuality", "python-syntax": "codeQuality", eslint: "codeQuality",
+    "security-scan": "security", "dependency-audit": "dependency", "test-runner": "test",
+    "api-probe": "api", "browser-accessibility": "ui", performance: "performance",
+  };
+  const statusPriority: Record<AgentStatus, number> = { pending: 0, active: 1, completed: 2, findings: 3, skipped: 4, failed: 5, unknown: 0 };
+  for (const [tool, result] of Object.entries(summary?.tools ?? {})) {
+    const agent = checkToAgent[tool];
+    if (!agent) continue;
+    const normalized: AgentStatus = result.status === "PASSED" || result.status === "COMPLETED" ? "completed"
+      : result.status === "FINDINGS" ? "findings"
+      : result.status === "FAILED" || result.status === "TIMED_OUT" ? "failed"
+      : result.status === "SKIPPED" ? "skipped" : "unknown";
+    if (statusPriority[normalized] > statusPriority[agentStatuses[agent]]) agentStatuses[agent] = normalized;
+  }
   const agentToolNames: Record<AgentKey, string> = {
     codeQuality: "agent:code-quality",
     security: "agent:security",
@@ -223,7 +243,11 @@ export default function AnalysisProgress({ runId }: { runId: string }) {
         <p className="font-semibold">Merge gate {gate ? (gate.allowed ? "passed" : "blocked") : "unavailable"}</p>
         <p className="mt-1">{gate?.reason ?? "Merge gate status could not be loaded."} · {gate?.findings ?? 0} high or critical finding(s)</p>
       </div>
-      {summary && <details className="mt-4 rounded-lg border border-[#edf0f4] p-4"><summary className="cursor-pointer text-sm font-semibold text-[#344054]">Execution summary ({summary.totals.executions} checks, {summary.totals.evidence} evidence)</summary><div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">{Object.entries(summary.tools).map(([tool, result]) => <div key={tool} className="text-[#475467]"><p>{tool}: {result.status} · {result.evidence} evidence</p>{result.reason && <p className="mt-1 text-xs text-[#667085]">{result.reason}</p>}</div>)}</div><p className="mt-3 text-xs text-[#667085]">Severity counts: {Object.entries(summary.bySeverity).map(([level, count]) => `${level} ${count}`).join(" · ") || "none"}</p></details>}
+      {summary && <section className="mt-4 rounded-lg border border-[#edf0f4] p-4"><h2 className="text-sm font-semibold text-[#344054]">Selected check results</h2><p className="mt-1 text-xs text-[#667085]">{summary.totals.executions - summary.totals.skipped - summary.totals.failed} ran · {summary.totals.skipped} skipped · {summary.totals.failed} failed · {summary.totals.findings} findings</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{Object.entries(summary.tools).map(([tool, result]) => {
+        const badgeClass = result.status === "PASSED" || result.status === "COMPLETED" ? "bg-emerald-50 text-emerald-700" : result.status === "FINDINGS" ? "bg-amber-50 text-amber-800" : result.status === "SKIPPED" ? "bg-slate-100 text-slate-700" : "bg-red-50 text-red-700";
+        const findings = checkFindings.filter((finding) => finding.source === tool && finding.filePath && finding.lineStart);
+        return <details key={tool} className="rounded-lg border border-[#edf0f4] p-3"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm"><span className="font-medium text-[#344054]">{tool} · {result.findings} finding(s)</span><span className={`rounded-full px-2 py-1 text-xs font-semibold ${badgeClass}`}>{result.status}</span></summary><p className="mt-2 text-xs text-[#667085]">Projects scanned: {result.projectsScanned}</p>{result.reason && <p className="mt-2 text-xs text-red-700">{result.reason}</p>}{tool === "test-runner" && result.status === "SKIPPED" && <p className="mt-2 text-xs text-[#475467]">No repository test script was available. You can choose a supported unit, integration, or black-box generator on the <a className="font-semibold text-[#1264d8] underline" href="/autonomous-testing">Autonomous Testing page</a>.</p>}{findings.length > 0 && <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="text-[#667085]"><th className="pr-3">File:line</th><th className="pr-3">Rule</th><th className="pr-3">Severity</th><th>Message</th></tr></thead><tbody>{findings.map((finding) => <tr key={finding.id} className="border-t border-[#edf0f4] align-top"><td className="whitespace-nowrap pr-3 py-2">{finding.filePath}:{finding.lineStart}</td><td className="pr-3 py-2">{finding.code ?? "—"}</td><td className="pr-3 py-2">{finding.severity}</td><td className="py-2">{finding.message}</td></tr>)}</tbody></table></div>}{findings.length === 0 && result.status === "FINDINGS" && result.output && <pre className="mt-3 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-[#f8fafc] p-3 text-xs text-[#475467]">{result.output}</pre>}{findings.length === 0 && result.reason == null && result.status !== "FINDINGS" && <p className="mt-2 text-xs text-[#667085]">No file-level findings.</p>}</details>;
+      })}</div><p className="mt-3 text-xs text-[#667085]">Severity counts: {Object.entries(summary.bySeverity).map(([level, count]) => `${level} ${count}`).join(" · ") || "none"}</p></section>}
 
       {/* Agent Status Grid */}
       <div className="mt-5 pt-5 border-t border-[#edf0f4]">

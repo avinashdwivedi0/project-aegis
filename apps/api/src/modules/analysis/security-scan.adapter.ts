@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import fg from "fast-glob";
 
@@ -78,48 +80,49 @@ export class SecurityScanAdapter implements ToolAdapter {
     const evidence: ToolEvidence[] = [];
     const failures: string[] = [];
     const outputs: string[] = [];
-    const projectRoots = projects.filter((project) => project.relativeRoot !== "." && project.markers.some((marker) => marker === "package.json" || marker === "tsconfig.json" || marker === "pyproject.toml" || marker === "requirements.txt"));
-    const rootSourceFiles = sourceFiles.filter((file) => !file.includes("/"));
-    const scanTargets = projectRoots.map((project) => ({ name: project.relativeRoot, target: path.posix.join("/workspace", project.relativeRoot) }));
-    if (rootSourceFiles.length > 0) scanTargets.push({ name: ".", target: "" });
-    if (scanTargets.length === 0) scanTargets.push({ name: ".", target: "/workspace" });
-    const semgrepArgsFor = (target: string) => ["scan", "--json", "--config", "p/default", "--config", "p/secrets", ...[".git", "node_modules", "vendor", "dist", "build", ".next", "out", "coverage", ".venv", "venv", "__pycache__"].flatMap((item) => ["--exclude", item]), ...(target ? [target] : rootSourceFiles.map((file) => path.posix.join("/workspace", file)))];
+    const semgrepCacheDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "aegis-semgrep-cache-"));
+    // Semgrep recursively scans nested projects, so one workspace invocation avoids
+    // repeated ruleset downloads and duplicate work for overlapping monorepo roots.
+    const scanTargets = [{ name: "workspace", target: "/workspace" }];
+    const discoveredProjectCount = Math.max(1, projects.length);
     let semgrepExecution;
+    let projectsScanned = 0;
     for (const target of scanTargets) {
-      const semgrepArgs = semgrepArgsFor(target.target);
+      const semgrepArgs = ["scan", "--json", "--jobs", "2", "--config", "p/default", "--config", "p/secrets", ...[".git", "node_modules", "vendor", "dist", "build", ".next", "out", "coverage", ".venv", "venv", "__pycache__"].flatMap((item) => ["--exclude", item]), target.target];
       try {
         semgrepExecution = await ContainerRunnerService.run({
           command: "semgrep",
           args: semgrepArgs,
           workspace,
+          writableMounts: [{ hostPath: semgrepCacheDirectory, containerPath: "/aegis-semgrep-cache" }],
           image: "semgrep/semgrep:latest",
           environment: {
             HOME: "/tmp",
             XDG_CONFIG_HOME: "/tmp/.config",
-            XDG_CACHE_HOME: "/tmp/.cache",
+            XDG_CACHE_HOME: "/aegis-semgrep-cache",
             SEMGREP_SEND_METRICS: "off",
           },
           memoryLimitMb: 2048,
           cpuLimit: 2,
           pidsLimit: 512,
-          timeoutMs: 90_000,
+          timeoutMs: 420_000,
           signal,
         });
+        projectsScanned += discoveredProjectCount;
         outputs.push(`[semgrep:${target.name}]\n${semgrepExecution.stdout}`);
         const report = this.parseSemgrep(semgrepExecution.stdout);
         if (!report) failures.push(`[${target.name}] ${semgrepExecution.stderr || `Semgrep returned no parseable JSON report (${semgrepExecution.status}, exit ${semgrepExecution.exitCode}): ${semgrepExecution.stdout.slice(0, 1200) || "no stdout"}`}`);
         else {
           evidence.push(...this.mapSemgrepFindings(report.results ?? [], workspace));
           if ((report.errors ?? []).length > 0) failures.push(...report.errors!.map((item) => `[${target.name}] ${item.message ?? "Semgrep reported a scan error."}`));
-          if (semgrepExecution.status !== "COMPLETED" && (report.results ?? []).length === 0) {
-            failures.push(`[${target.name}] ${semgrepExecution.stderr || `Semgrep exited with ${semgrepExecution.status}.`}`);
-          }
+          if (semgrepExecution.status !== "COMPLETED" && (report.results ?? []).length === 0) failures.push(`[${target.name}] ${semgrepExecution.stderr || `Semgrep exited with ${semgrepExecution.status}.`}`);
         }
       } catch (error) {
         failures.push(`[${target.name}] ${error instanceof Error ? error.message : String(error)}`);
       }
       if (signal?.aborted) break;
     }
+    if (signal?.aborted) failures.push("Security scan was cancelled before completion.");
 
     try {
       const secretExecution = await ContainerRunnerService.run({
@@ -149,6 +152,8 @@ export class SecurityScanAdapter implements ToolAdapter {
       failures.push(error instanceof Error ? error.message : String(error));
     }
 
+    await fs.rm(semgrepCacheDirectory, { recursive: true, force: true });
+
     if (evidence.length === 0 && failures.length === 0) {
       evidence.push(createCompletionEvidence(this.name, this.version, "Semgrep p/default, Semgrep p/secrets, and the hardcoded-secret scan completed with no findings."));
     }
@@ -169,7 +174,7 @@ export class SecurityScanAdapter implements ToolAdapter {
       toolVersion: this.version,
       status: failed ? "failed" : "completed",
       checkStatus: failed ? "FAILED" : hasFindings ? "FINDINGS" : "PASSED",
-      projectsScanned: Math.max(projects.length, 1),
+      projectsScanned,
       failureReason,
       command: ["semgrep", "scan", "--json", "--config", "p/default", "--config", "p/secrets", ...scanTargets.map(({ target, name }) => target || name)],
       execution,

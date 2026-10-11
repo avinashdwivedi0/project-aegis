@@ -357,24 +357,46 @@ export class AnalysisService {
         status: true,
         evidence: true,
         stderr: true,
+        stdout: true,
       },
     });
-    const byTool: Record<string, { status: string; evidence: number; reason: string | null }> = {};
+    const checkTypes = new Set([
+      "typescript", "python-syntax", "eslint", "dependency-audit",
+      "security-scan", "test-runner", "api-probe", "browser-accessibility", "performance",
+    ]);
+    const checkExecutions = executions.filter((execution) => checkTypes.has(execution.command));
+    const byTool: Record<string, { status: string; evidence: number; findings: number; projectsScanned: number; reason: string | null; output: string }> = {};
     const bySeverity: Record<string, number> = {};
     let evidenceCount = 0;
+    let findingCount = 0;
+    let skippedCount = 0;
+    let failedCount = 0;
 
-    for (const execution of executions) {
+    for (const execution of checkExecutions) {
       const evidence = Array.isArray(execution.evidence)
         ? execution.evidence
         : [];
+      const metadataLine = execution.stderr.split(/\r?\n/).find((line) => line.startsWith("AEGIS_CHECK_META "));
+      let metadata: { checkStatus?: string; projectsScanned?: number; reason?: string | null } = {};
+      try {
+        if (metadataLine) metadata = JSON.parse(metadataLine.slice("AEGIS_CHECK_META ".length));
+      } catch {
+        metadata = {};
+      }
       byTool[execution.command] = {
-        status: execution.status,
+        status: metadata.checkStatus ?? execution.status,
         evidence: evidence.length,
-        reason: execution.status.toUpperCase() === "COMPLETED"
+        findings: evidence.filter((item) => Boolean(item && typeof item === "object" && "filePath" in item && "lineStart" in item)).length,
+        projectsScanned: metadata.projectsScanned ?? 0,
+        output: execution.stdout.slice(0, 4000),
+        reason: metadata.reason ?? (["PASSED", "FINDINGS", "COMPLETED"].includes(execution.status.toUpperCase())
           ? null
-          : execution.stderr || null,
+          : execution.stderr.replace(/^AEGIS_CHECK_META .*$/m, "").trim() || null),
       };
       evidenceCount += evidence.length;
+      findingCount += byTool[execution.command].findings;
+      if (execution.status.toUpperCase() === "SKIPPED") skippedCount += 1;
+      if (["FAILED", "TIMED_OUT", "CANCELLED"].includes(execution.status.toUpperCase())) failedCount += 1;
 
       for (const item of evidence) {
         if (!item || typeof item !== "object" || !("severity" in item)) {
@@ -391,8 +413,11 @@ export class AnalysisService {
       runId,
       tools: byTool,
       totals: {
-        executions: executions.length,
+        executions: checkExecutions.length,
         evidence: evidenceCount,
+        findings: findingCount,
+        skipped: skippedCount,
+        failed: failedCount,
       },
       bySeverity,
     };

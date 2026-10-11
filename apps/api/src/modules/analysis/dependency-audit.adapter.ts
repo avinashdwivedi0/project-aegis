@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import path from "path";
 import fg from "fast-glob";
 
@@ -16,6 +17,8 @@ type AuditVulnerability = {
   severity?: string;
   title?: string;
   url?: string;
+  via?: Array<string | { title?: string; url?: string; source?: number; severity?: string; range?: string }>;
+  fixAvailable?: boolean | { version?: string };
 };
 
 type AuditReport = {
@@ -56,10 +59,10 @@ export class DependencyAuditAdapter implements ToolAdapter {
         : ["audit", "--prefix", path.posix.join("/workspace", item.directory), "--json"];
       const execution = await ContainerRunnerService.run({ command, args, workspace, signal });
       executions.push({ ...execution, directory: item.directory, packageManager: item.packageManager });
-      evidence.push(...this.parseOutput(execution.stdout).map((finding) => ({
+      evidence.push(...await this.parseOutput(execution.stdout, path.join(workspace, item.directory, item.packageManager === "pnpm" ? "pnpm-lock.yaml" : "package-lock.json"), item.directory).then((findings) => findings.map((finding) => ({
         ...finding,
         packageName: [item.directory, finding.packageName].filter(Boolean).join(":"),
-      })));
+      }))));
       if (signal?.aborted) break;
     }
     const failedExecution = executions.find(({ status }) => status !== "COMPLETED");
@@ -85,6 +88,9 @@ export class DependencyAuditAdapter implements ToolAdapter {
       tool: this.name,
       toolVersion: this.version,
       status: reportParsed ? "completed" : "failed",
+      checkStatus: !reportParsed ? "FAILED" : evidence.some((item) => item.filePath && item.lineStart) ? "FINDINGS" : "PASSED",
+      projectsScanned: executions.length,
+      failureReason: reportParsed ? undefined : execution.stderr || "Dependency audit did not return a parseable vulnerability report.",
       command: ["dependency-audit", ...execution.args],
       execution,
       evidence,
@@ -108,7 +114,7 @@ export class DependencyAuditAdapter implements ToolAdapter {
     return [...managersByDirectory.entries()].map(([directory, packageManager]) => ({ directory, packageManager }));
   }
 
-  private parseOutput(output: string): ToolEvidence[] {
+  private async parseOutput(output: string, lockfilePath: string, directory: string): Promise<ToolEvidence[]> {
     const start = output.indexOf("{");
     const end = output.lastIndexOf("}");
     if (start < 0 || end < start) {
@@ -124,16 +130,26 @@ export class DependencyAuditAdapter implements ToolAdapter {
 
     const vulnerabilities = report.vulnerabilities ??
       report.advisories ?? {};
-    return Object.entries(vulnerabilities).map(([packageName, vulnerability]) => ({
-      id: crypto.randomUUID(),
-      tool: this.name,
-      toolVersion: this.version,
-      status: "failed",
-      message: vulnerability.title ?? "Dependency vulnerability detected.",
-      severity: this.normalizeSeverity(vulnerability.severity),
-      packageName: vulnerability.name ?? vulnerability.module_name ?? packageName,
-      code: vulnerability.url,
-    }));
+    let lockfileLines: string[] = [];
+    try { lockfileLines = (await fs.readFile(lockfilePath, "utf8")).split(/\r?\n/); } catch { /* A missing lockfile will be surfaced as a location-less audit result. */ }
+    return Object.entries(vulnerabilities).map(([packageName, vulnerability]) => {
+      const name = vulnerability.name ?? vulnerability.module_name ?? packageName;
+      const advisory = vulnerability.via?.find((item) => typeof item !== "string") as Exclude<NonNullable<AuditVulnerability["via"]>[number], string> | undefined;
+      const needle = packageName.replace(/^@/, "").replaceAll("/", "+");
+      const lineIndex = lockfileLines.findIndex((line) => line.includes(needle) || line.includes(name));
+      return {
+        id: crypto.randomUUID(),
+        tool: this.name,
+        toolVersion: this.version,
+        status: "failed" as const,
+        message: `${advisory?.title ?? vulnerability.title ?? `Vulnerable dependency ${name}`}. ${typeof vulnerability.fixAvailable === "object" && vulnerability.fixAvailable.version ? `Fixed version: ${vulnerability.fixAvailable.version}.` : advisory?.range?.startsWith("<") ? `Patched version: ${advisory.range.slice(1)} (advisory affected range ${advisory.range}; npm reports no automatic fix).` : "npm did not provide a fixed version."}`,
+        severity: this.normalizeSeverity(vulnerability.severity),
+        packageName: name,
+        code: advisory?.url ?? vulnerability.url ?? (advisory?.source ? `GHSA:${advisory.source}` : undefined),
+        filePath: lineIndex >= 0 ? path.posix.join(directory, path.basename(lockfilePath)) : undefined,
+        lineStart: lineIndex >= 0 ? lineIndex + 1 : undefined,
+      };
+    });
   }
 
   private hasAuditReport(output: string) {

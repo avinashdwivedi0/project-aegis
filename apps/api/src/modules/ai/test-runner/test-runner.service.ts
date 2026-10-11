@@ -114,6 +114,7 @@ type PlaywrightCommandRunner = (options: {
   args: string[];
   timeoutMs: number;
   browserCompatibility?: boolean;
+  networkName?: string;
 }) => Promise<ToolRunResult>;
 
 const defaultRunner: PlaywrightCommandRunner = (options) =>
@@ -124,6 +125,7 @@ const defaultRunner: PlaywrightCommandRunner = (options) =>
       ...options.args,
     ],
     workspace: options.workspace,
+    networkName: options.networkName,
     image:
       process.env.PLAYWRIGHT_CONTAINER_IMAGE ??
       "aegis-playwright-runner:local",
@@ -167,6 +169,7 @@ export class PlaywrightTestRunnerService {
   async run(
     input: TestRunnerInput,
     ownerId?: string,
+    networkName?: string,
   ): Promise<TestRunnerOutput> {
     const validatedInput = testRunnerInputSchema.parse(input);
     const startedAt = Date.now();
@@ -272,6 +275,7 @@ export class PlaywrightTestRunnerService {
       artifactDirectory,
       timeoutMs: validatedInput.timeoutMs,
       browserCompatibility: Boolean(validatedInput.compatibility?.browsers.includes("firefox")),
+      networkName,
       args: [
         "test",
         "--config=/generated/playwright.config.ts",

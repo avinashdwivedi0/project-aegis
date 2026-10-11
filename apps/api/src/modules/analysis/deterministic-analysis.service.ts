@@ -18,16 +18,25 @@ export class DeterministicAnalysisService {
     for (const adapter of adapters) {
       const result = await adapter.run(workspace, signal);
       results.push(result);
+      const checkStatus = result.checkStatus ?? (result.status === "skipped"
+        ? "SKIPPED"
+        : result.status === "failed"
+          ? "FAILED"
+          : result.evidence.some((item) => item.status === "failed") ? "FINDINGS" : "PASSED");
+      const checkMetadata = `AEGIS_CHECK_META ${JSON.stringify({ checkStatus, projectsScanned: result.projectsScanned ?? 0, reason: result.skippedReason ?? result.failureReason ?? null })}`;
 
       await prisma.toolExecution.create({
         data: {
           analysisRunId,
-          command: result.execution?.command ?? result.tool,
+          command: result.tool,
           args: result.execution?.args ?? [],
-          status: result.execution?.status ?? result.status.toUpperCase(),
+          // Persist the user-facing outcome, not just the container process exit.
+          // A tool may exit nonzero because it found issues (FINDINGS), or may
+          // skip without starting a process; both differ from a tool failure.
+          status: checkStatus,
           exitCode: result.execution?.exitCode,
           stdout: result.execution?.stdout ?? "",
-          stderr: result.execution?.stderr ?? result.skippedReason ?? "",
+          stderr: [result.failureReason ?? result.skippedReason, result.execution?.stderr, checkMetadata].filter(Boolean).join("\n"),
           durationMs: result.execution?.durationMs ?? 0,
           evidence: result.evidence,
         },

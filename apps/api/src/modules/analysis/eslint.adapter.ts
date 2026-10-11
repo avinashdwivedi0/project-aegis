@@ -52,6 +52,7 @@ export class EslintAdapter implements ToolAdapter {
     }
 
     let configDirectory: string | undefined;
+    let npmCacheDirectory: string | undefined;
     const evidence: ToolEvidence[] = [];
     const outputs: string[] = [];
     const errors: string[] = [];
@@ -61,6 +62,7 @@ export class EslintAdapter implements ToolAdapter {
         configDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "aegis-eslint-default-"));
         await fs.writeFile(path.join(configDirectory, "default.eslintrc.json"), DEFAULT_RULESET, "utf8");
       }
+      npmCacheDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "aegis-eslint-npm-cache-"));
 
       for (const project of projects) {
         const target = project.targetFiles.length > 0
@@ -83,10 +85,11 @@ export class EslintAdapter implements ToolAdapter {
             command,
             args,
             workspace,
-            writableMounts: !project.hasEslintConfig && configDirectory
-              ? [{ hostPath: configDirectory, containerPath: "/aegis-eslint-config" }]
-              : undefined,
-            environment: { HOME: "/tmp", npm_config_cache: "/tmp/npm-cache", ESLINT_USE_FLAT_CONFIG: flatConfig ? "true" : "false" },
+            writableMounts: [
+              ...(npmCacheDirectory ? [{ hostPath: npmCacheDirectory, containerPath: "/aegis-eslint-npm-cache" }] : []),
+              ...(!project.hasEslintConfig && configDirectory ? [{ hostPath: configDirectory, containerPath: "/aegis-eslint-config" }] : []),
+            ],
+            environment: { HOME: "/tmp", npm_config_cache: "/aegis-eslint-npm-cache", ESLINT_USE_FLAT_CONFIG: flatConfig ? "true" : "false" },
             signal,
             memoryLimitMb: 2048,
             cpuLimit: 2,
@@ -96,7 +99,9 @@ export class EslintAdapter implements ToolAdapter {
           outputs.push(`[${project.relativeRoot}]\n${execution.stdout}`);
           executed.push(project.relativeRoot);
           const parsed = this.parseOutput(execution.stdout, workspace);
-          evidence.push(...parsed.evidence);
+          evidence.push(...parsed.evidence.map((item) => project.hasEslintConfig
+            ? item
+            : { ...item, message: `[default ruleset: eslint:recommended] ${item.message}` }));
           if (!parsed.parsed) {
             errors.push(`[${project.relativeRoot}] ${parsed.reason}; ESLint ${execution.status} exit ${execution.exitCode}; ${execution.stderr.slice(0, 600) || "no stderr"}`);
           } else if (execution.status !== "COMPLETED" && parsed.evidence.length === 0) {
@@ -111,6 +116,7 @@ export class EslintAdapter implements ToolAdapter {
       errors.push(error instanceof Error ? error.message : String(error));
     } finally {
       if (configDirectory) await fs.rm(configDirectory, { recursive: true, force: true });
+      if (npmCacheDirectory) await fs.rm(npmCacheDirectory, { recursive: true, force: true });
     }
 
     const failureReason = errors.length > 0 ? errors.join("\n") : undefined;
